@@ -1,0 +1,689 @@
+import { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from "framer-motion";
+import {
+  Clock,
+  Plus,
+  Search,
+  CheckCircle2,
+  AlertCircle,
+  RefreshCw,
+  X,
+  AlertTriangle
+ 
+} from 'lucide-react';
+import api from '../services/api';
+import { useAuth } from '../context/AuthContext';
+
+const Schedules = () => {
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'Admin';
+
+  // Core registries
+  const [schedules, setSchedules] = useState([]);
+  const [routes, setRoutes] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [successMsg, setSuccessMsg] = useState(null);
+
+  // Filters & Sorting state
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState('All');
+  const [sortBy, setSortBy] = useState('scheduleCode');
+  const [sortOrder, setSortOrder] = useState('asc');
+
+  // Modal control states
+  const [isAddOpen, setIsAddOpen] = useState(false);
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+
+  // Form input state
+  const [selectedSchedule, setSelectedSchedule] = useState(null);
+  const [formData, setFormData] = useState({
+    route: '',
+    departureTime: '06:00',
+    status: 'Active'
+  });
+  const [formErrors, setFormErrors] = useState({});
+  const [submitLoading, setSubmitLoading] = useState(false);
+
+  // Fetch schedules & routes
+  const fetchData = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const [schedulesRes, routesRes] = await Promise.all([
+        api.get('/schedules'),
+        api.get('/routes')
+      ]);
+
+      if (schedulesRes.data.success) {
+        setSchedules(schedulesRes.data.data);
+      }
+      if (routesRes.data.success) {
+        // Only allow active routes to be scheduled
+        const activeOnly = routesRes.data.data.filter((r) => r.status === 'Active' || !r.status);
+        setRoutes(activeOnly);
+        if (activeOnly.length > 0) {
+          setFormData((prev) => ({ ...prev, route: activeOnly[0]._id }));
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching schedules/routes:', err);
+      setError(err.response?.data?.message || err.message || 'Unable to connect to transit services.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+ useEffect(() => {
+  const loadData = async () => {
+    await fetchData();
+  };
+
+  loadData();
+}, []);
+
+  const triggerSuccess = (msg) => {
+    setSuccessMsg(msg);
+    setTimeout(() => {
+      setSuccessMsg(null);
+    }, 4000);
+  };
+
+  // Inputs
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+    setFormData((prev) => ({ ...prev, [name]: value }));
+
+    if (formErrors[name]) {
+      setFormErrors((prev) => ({ ...prev, [name]: null }));
+    }
+  };
+
+  // Form Validation
+  const validateForm = () => {
+    const errors = {};
+
+    if (!formData.route) {
+      errors.route = 'An active travel route is required.';
+    }
+
+    if (!formData.departureTime) {
+      errors.departureTime = 'Departure time is required.';
+    } else {
+      const timeMatch = formData.departureTime.match(/^([01]\d|2[0-3]):([0-5]\d)$/);
+      if (!timeMatch) {
+        errors.departureTime = 'Departure time must be in HH:MM format.';
+      }
+    }
+
+    setFormErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  // Add Schedule Submit
+  const handleAddSubmit = async (e) => {
+    e.preventDefault();
+    if (!validateForm()) return;
+
+    setSubmitLoading(true);
+    try {
+      const response = await api.post('/schedules', formData);
+      if (response.data.success) {
+        triggerSuccess(`Schedule ${response.data.data.scheduleCode} registered successfully!`);
+        setIsAddOpen(false);
+        resetForm();
+        fetchData();
+      }
+    } catch (err) {
+      console.error('Error creating schedule:', err);
+      const serverMsg = err.response?.data?.message || 'Failed to register schedule slot.';
+      if (serverMsg.toLowerCase().includes('duplicate') || serverMsg.toLowerCase().includes('already exists')) {
+        setFormErrors({ form: 'A schedule slot already exists for this travel corridor at the specified departure time.' });
+      } else {
+        setFormErrors({ form: serverMsg });
+      }
+    } finally {
+      setSubmitLoading(false);
+    }
+  };
+
+  // Edit Schedule Submit
+  const handleEditSubmit = async (e) => {
+    e.preventDefault();
+    if (!validateForm()) return;
+
+    setSubmitLoading(true);
+    try {
+      const response = await api.put(`/schedules/${selectedSchedule._id}`, formData);
+      if (response.data.success) {
+        triggerSuccess(`Schedule ${response.data.data.scheduleCode} details updated successfully!`);
+        setIsEditOpen(false);
+        resetForm();
+        fetchData();
+      }
+    } catch (err) {
+      console.error('Error updating schedule:', err);
+      const serverMsg = err.response?.data?.message || 'Failed to update schedule slot.';
+      if (serverMsg.toLowerCase().includes('duplicate') || serverMsg.toLowerCase().includes('already exists')) {
+        setFormErrors({ form: 'A schedule slot already exists for this travel corridor at the specified departure time.' });
+      } else {
+        setFormErrors({ form: serverMsg });
+      }
+    } finally {
+      setSubmitLoading(false);
+    }
+  };
+
+  // Delete Confirm
+  const handleDeleteConfirm = async () => {
+    if (!selectedSchedule) return;
+    setSubmitLoading(true);
+    try {
+      const response = await api.delete(`/schedules/${selectedSchedule._id}`);
+      if (response.data.success) {
+        triggerSuccess(`Schedule slot ${selectedSchedule.scheduleCode} deleted successfully.`);
+        setIsDeleteOpen(false);
+        setSelectedSchedule(null);
+        fetchData();
+      }
+    } catch (err) {
+      console.error('Error deleting schedule:', err);
+      triggerSuccess(`Error: ${err.response?.data?.message || 'Could not delete schedule slot.'}`);
+      setIsDeleteOpen(false);
+    } finally {
+      setSubmitLoading(false);
+    }
+  };
+
+  const openAddModal = () => {
+    resetForm();
+    setIsAddOpen(true);
+  };
+
+  const openEditModal = (sched) => {
+    setSelectedSchedule(sched);
+    setFormData({
+      route: sched.route ? sched.route._id : '',
+      departureTime: sched.departureTime,
+      status: sched.status || 'Active'
+    });
+    setFormErrors({});
+    setIsEditOpen(true);
+  };
+
+  const openDeleteModal = (sched) => {
+    setSelectedSchedule(sched);
+    setIsDeleteOpen(true);
+  };
+
+  const resetForm = () => {
+    setFormData({
+      route: routes.length > 0 ? routes[0]._id : '',
+      departureTime: '06:00',
+      status: 'Active'
+    });
+    setFormErrors({});
+    setSelectedSchedule(null);
+  };
+
+  const handleSort = (field) => {
+    if (sortBy === field) {
+      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortBy(field);
+      setSortOrder('asc');
+    }
+  };
+
+  // Stats calculation
+  const totalSchedules = schedules.length;
+  const activeSchedules = schedules.filter((s) => s.status === 'Active' || !s.status).length;
+  const inactiveSchedules = schedules.filter((s) => s.status === 'Inactive').length;
+
+  // Filter & Search & Sort routing data
+  const filteredSchedules = schedules
+    .filter((sched) => {
+      const query = searchQuery.toLowerCase().trim();
+      const matchesSearch =
+        query === '' ||
+        (sched.scheduleCode && sched.scheduleCode.toLowerCase().includes(query)) ||
+        (sched.departureTime && sched.departureTime.includes(query)) ||
+        (sched.route &&
+          (sched.route.origin.toLowerCase().includes(query) ||
+            sched.route.destination.toLowerCase().includes(query) ||
+            sched.route.routeCode.toLowerCase().includes(query)));
+
+      const matchesStatus = statusFilter === 'All' || sched.status === statusFilter;
+
+      return matchesSearch && matchesStatus;
+    })
+    .sort((a, b) => {
+      let valA = a[sortBy];
+      let valB = b[sortBy];
+
+      if (typeof valA === 'string') {
+        valA = valA.toLowerCase();
+        valB = valB.toLowerCase();
+      }
+
+      if (valA < valB) return sortOrder === 'asc' ? -1 : 1;
+      if (valA > valB) return sortOrder === 'asc' ? 1 : -1;
+      return 0;
+    });
+
+  return (
+    <div className="space-y-8 select-none">
+      {/* Top Banner Tagline */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-[#18181B] border border-[#27272A] p-4 rounded-xl relative overflow-hidden backdrop-blur-md">
+        <div className="absolute right-0 top-0 translate-x-12 -translate-y-6 w-32 h-32 rounded-full bg-[#F97316]/5 blur-3xl pointer-events-none" />
+        <div className="flex items-center gap-3">
+          <div className="flex items-center justify-center p-2.5 rounded-lg bg-[#F97316]/10 border border-[#F97316]/20">
+            <Clock className="w-5 h-5 text-[#F97316]" />
+          </div>
+          <div>
+            <h3 className="text-sm font-semibold text-[#FFFFFF]">Departure Schedule Manager</h3>
+            <p className="text-xs text-[#A1A1AA] font-mono mt-0.5">Plan Routes. Manage Trips. Monitor Operations.</p>
+          </div>
+        </div>
+        {!isAdmin && (
+          <button
+            onClick={openAddModal}
+            disabled={routes.length === 0}
+            className="px-4 py-2 bg-[#F97316] hover:bg-[#EA580C] text-xs font-bold text-[#FFFFFF] rounded-lg shadow-md shadow-[#F97316]/10 hover:shadow-lg hover:shadow-[#F97316]/20 transition-all flex items-center justify-center gap-1.5 self-start sm:self-center cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Configure Schedule Slot</span>
+          </button>
+        )}
+      </div>
+
+      {/* Success alert banner */}
+      <AnimatePresence>
+        {successMsg && (
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs flex items-center gap-3 shadow-md backdrop-blur-md"
+          >
+            <CheckCircle2 className="w-5 h-5 shrink-0 text-emerald-400" />
+            <div className="flex-1 font-sans">{successMsg}</div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {routes.length === 0 && !loading && (
+        <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-400 flex items-center gap-3 shadow-md">
+          <AlertTriangle className="w-5 h-5 shrink-0" />
+          <div className="flex-1">
+            <strong>System Pre-requisite Required:</strong> No active corridors routes are registered. You must first create at least one active route under Route Management before configuring trip departures.
+          </div>
+        </div>
+      )}
+
+      {/* Bento Stats Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {/* Total Schedules */}
+        <div className="bg-[#18181B] border border-[#27272A] p-4 rounded-xl flex flex-col justify-between h-28 relative overflow-hidden backdrop-blur-md">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-mono text-[#A1A1AA] uppercase">Total Schedules</span>
+            <div className="p-1 rounded bg-[#F97316]/5 border border-[#F97316]/10 text-[#F97316]">
+              <Clock className="w-4 h-4" />
+            </div>
+          </div>
+          <div>
+            <h4 className="text-2xl font-black text-[#FFFFFF] font-mono">{loading ? '...' : totalSchedules}</h4>
+            <span className="text-[10px] text-[#A1A1AA] mt-0.5 block">Configured Departure Slots</span>
+          </div>
+        </div>
+
+        {/* Active Schedules */}
+        <div className="bg-[#18181B] border border-[#27272A] p-4 rounded-xl flex flex-col justify-between h-28 relative overflow-hidden backdrop-blur-md">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-mono text-[#A1A1AA] uppercase">Active Schedules</span>
+            <div className="p-1 rounded bg-emerald-500/5 border border-emerald-500/10 text-emerald-400">
+              <CheckCircle2 className="w-4 h-4" />
+            </div>
+          </div>
+          <div>
+            <h4 className="text-2xl font-black text-emerald-400 font-mono">{loading ? '...' : activeSchedules}</h4>
+            <span className="text-[10px] text-[#A1A1AA] mt-0.5 block">Approved operating slots</span>
+          </div>
+        </div>
+
+        {/* Inactive Schedules */}
+        <div className="bg-[#18181B] border border-[#27272A] p-4 rounded-xl flex flex-col justify-between h-28 relative overflow-hidden backdrop-blur-md">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-mono text-[#A1A1AA] uppercase">Suspended Slots</span>
+            <div className="p-1 rounded bg-[#EF4444]/5 border border-[#EF4444]/10 text-[#EF4444]">
+              <AlertCircle className="w-4 h-4" />
+            </div>
+          </div>
+          <div>
+            <h4 className="text-2xl font-black text-[#EF4444] font-mono">{loading ? '...' : inactiveSchedules}</h4>
+            <span className="text-[10px] text-[#A1A1AA] mt-0.5 block">Temporarily archived slots</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Network or database connection error */}
+      {error && (
+        <div className="p-4 rounded-xl bg-[#EF4444]/10 border border-[#EF4444]/20 text-xs text-[#EF4444] flex items-center gap-3">
+          <AlertCircle className="w-5 h-5 shrink-0" />
+          <div className="flex-1">
+            <strong>System Connection Error:</strong> {error}
+          </div>
+          <button
+            onClick={fetchData}
+            className="px-3 py-1.5 bg-[#EF4444]/20 text-[#EF4444] font-mono text-[10px] hover:bg-[#EF4444]/30 rounded transition-colors uppercase font-bold cursor-pointer"
+          >
+            Retry Connection
+          </button>
+        </div>
+      )}
+
+      {/* Control Board */}
+      <div className="bg-[#18181B] border border-[#27272A] rounded-xl overflow-hidden backdrop-blur-md">
+        <div className="p-4 border-b border-[#27272A] flex flex-col md:flex-row gap-4 justify-between items-stretch md:items-center">
+          {/* Search box */}
+          <div className="relative flex-1 max-w-md">
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#A1A1AA]" />
+            <input
+              type="text"
+              placeholder="Search by Sched Code, departure time, origin, dest..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-10 pr-4 py-2.5 bg-[#09090B] border border-[#27272A] rounded-lg text-xs text-[#FFFFFF] placeholder:text-[#A1A1AA]/40 outline-none focus:border-[#F97316]/50 transition-all font-sans"
+            />
+          </div>
+
+          {/* Filtering buttons */}
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex items-center gap-1.5 bg-[#09090B] border border-[#27272A] px-2.5 py-1.5 rounded-lg text-xs text-[#FFFFFF]">
+              <span className="text-[10px] font-mono text-[#A1A1AA] uppercase mr-1">Status:</span>
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="bg-transparent border-none outline-none text-[#FFFFFF] text-xs font-semibold cursor-pointer select-none"
+              >
+                <option value="All" className="bg-[#18181B] text-[#FFFFFF]">All Statuses</option>
+                <option value="Active" className="bg-[#18181B] text-emerald-400 font-semibold">Active</option>
+                <option value="Inactive" className="bg-[#18181B] text-[#EF4444] font-semibold">Inactive</option>
+              </select>
+            </div>
+
+            {(searchQuery || statusFilter !== 'All') && (
+              <button
+                onClick={() => {
+                  setSearchQuery('');
+                  setStatusFilter('All');
+                }}
+                className="px-3 py-2 border border-[#27272A] hover:bg-[#27272A]/30 text-[#A1A1AA] hover:text-[#FFFFFF] rounded-lg text-xs transition-colors cursor-pointer flex items-center gap-1.5"
+              >
+                <X className="w-3.5 h-3.5" />
+                <span>Reset Filters</span>
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* List Table Loader */}
+        {loading ? (
+          <div className="h-64 flex flex-col items-center justify-center gap-3">
+            <motion.div
+              animate={{ rotate: 360 }}
+              transition={{ repeat: Infinity, duration: 1.5, ease: 'linear' }}
+              className="w-8 h-8 border-2 border-[#F97316] border-t-transparent rounded-full"
+            />
+            <span className="text-xs font-mono text-[#A1A1AA]">Retrieving Scheduling Slots...</span>
+          </div>
+        ) : filteredSchedules.length === 0 ? (
+          <div className="h-64 flex flex-col items-center justify-center text-center p-6 space-y-4">
+            <div className="p-3.5 rounded-xl bg-[#27272A]/20 border border-[#27272A] text-[#A1A1AA]">
+              <Clock className="w-8 h-8 text-[#A1A1AA]/50" />
+            </div>
+            <div className="max-w-xs">
+              <h4 className="text-sm font-semibold text-[#FFFFFF]">No Schedules Registered</h4>
+              <p className="text-xs text-[#A1A1AA] mt-1.5">
+                No trip schedules match your filters. Establish a new departure timing on an active corridor route.
+              </p>
+            </div>
+            {routes.length > 0 && (
+              <button
+                onClick={openAddModal}
+                className="px-3 py-1.5 bg-[#F97316]/10 border border-[#F97316]/20 hover:bg-[#F97316]/20 text-[#F97316] text-xs font-semibold rounded-lg transition-colors cursor-pointer"
+              >
+                Configure Schedule
+              </button>
+            )}
+          </div>
+        ) : (
+          <ScheduleTable
+            schedules={filteredSchedules}
+            onEdit={openEditModal}
+            onDelete={openDeleteModal}
+            sortBy={sortBy}
+            sortOrder={sortOrder}
+            onSort={handleSort}
+          />
+        )}
+      </div>
+
+      {/* --- MODALS DIALOGS --- */}
+
+      {/* Add Schedule Form Modal */}
+      <FormModal
+        isOpen={isAddOpen}
+        onClose={() => setIsAddOpen(false)}
+        title="Schedule Departure Slot"
+        icon={<Clock className="w-5 h-5" />}
+      >
+        <form onSubmit={handleAddSubmit} className="space-y-4">
+          {formErrors.form && (
+            <div className="p-3 bg-[#EF4444]/10 border border-[#EF4444]/20 rounded-lg text-xs text-[#EF4444] flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 shrink-0" />
+              <span className="flex-1 leading-normal font-sans">{formErrors.form}</span>
+            </div>
+          )}
+
+          {/* Route Dropdown Selection */}
+          <div className="space-y-1.5">
+            <label className="text-xs font-mono text-[#A1A1AA] uppercase block">Assigned Corridor Route</label>
+            <select
+              name="route"
+              value={formData.route}
+              onChange={handleInputChange}
+              className={`w-full px-3.5 py-2.5 text-xs bg-[#09090B] border rounded-lg text-[#FFFFFF] outline-none focus:border-[#F97316]/50 transition-all cursor-pointer ${
+                formErrors.route ? 'border-[#EF4444]' : 'border-[#27272A]'
+              }`}
+            >
+              {routes.map((rt) => (
+                <option key={rt._id} value={rt._id}>
+                  {rt.routeCode}: {rt.origin} to {rt.destination} (₱{rt.estimatedFare})
+                </option>
+              ))}
+            </select>
+            {formErrors.route && (
+              <p className="text-[10px] text-[#EF4444] mt-1 flex items-center gap-1 font-sans">
+                <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                <span>{formErrors.route}</span>
+              </p>
+            )}
+          </div>
+
+          {/* Departure Time Input (HH:MM string) */}
+          <div className="space-y-1.5">
+            <label className="text-xs font-mono text-[#A1A1AA] uppercase block">Departure Time (24-Hour Format)</label>
+            <input
+              type="time"
+              name="departureTime"
+              value={formData.departureTime}
+              onChange={handleInputChange}
+              className={`w-full px-3.5 py-2.5 text-xs bg-[#09090B] border rounded-lg text-[#FFFFFF] outline-none transition-all cursor-pointer ${
+                formErrors.departureTime ? 'border-[#EF4444] focus:border-[#EF4444]/50' : 'border-[#27272A] focus:border-[#F97316]/50'
+              }`}
+            />
+            {formErrors.departureTime ? (
+              <p className="text-[10px] text-[#EF4444] mt-1 flex items-center gap-1">
+                <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                <span>{formErrors.departureTime}</span>
+              </p>
+            ) : (
+              <span className="text-[9px] font-mono text-[#A1A1AA] block mt-1">Specify departure hour using local 24-hour clock. Expected arrival is calculated dynamically.</span>
+            )}
+          </div>
+
+          {/* Status Selection */}
+          <div className="space-y-1.5">
+            <label className="text-xs font-mono text-[#A1A1AA] uppercase block">Operational Status</label>
+            <select
+              name="status"
+              value={formData.status}
+              onChange={handleInputChange}
+              className="w-full px-3.5 py-2.5 text-xs bg-[#09090B] border border-[#27272A] rounded-lg text-[#FFFFFF] outline-none focus:border-[#F97316]/50 transition-all cursor-pointer"
+            >
+              <option value="Active">Active</option>
+              <option value="Inactive">Inactive</option>
+            </select>
+          </div>
+
+          {/* Actions */}
+          <div className="flex gap-3 pt-4 border-t border-[#27272A]">
+            <button
+              type="button"
+              onClick={() => setIsAddOpen(false)}
+              className="flex-1 py-2.5 border border-[#27272A] hover:bg-[#18181B] text-xs font-semibold text-[#A1A1AA] hover:text-[#FFFFFF] rounded-lg transition-colors cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={submitLoading}
+              className="flex-1 py-2.5 bg-[#F97316] hover:bg-[#EA580C] text-xs font-semibold text-[#FFFFFF] rounded-lg shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+            >
+              {submitLoading ? (
+                <RefreshCw className="w-4 h-4 animate-spin" />
+              ) : (
+                <span>Register Schedule</span>
+              )}
+            </button>
+          </div>
+        </form>
+      </FormModal>
+
+      {/* Edit Schedule Form Modal */}
+      <FormModal
+        isOpen={isEditOpen}
+        onClose={() => setIsEditOpen(false)}
+        title={selectedSchedule ? `Modify Schedule: ${selectedSchedule.scheduleCode}` : 'Modify Schedule'}
+        icon={<Clock className="w-5 h-5 text-amber-500" />}
+      >
+        <form onSubmit={handleEditSubmit} className="space-y-4">
+          {formErrors.form && (
+            <div className="p-3 bg-[#EF4444]/10 border border-[#EF4444]/20 rounded-lg text-xs text-[#EF4444] flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 shrink-0" />
+              <span className="flex-1 leading-normal font-sans">{formErrors.form}</span>
+            </div>
+          )}
+
+          {/* Route Dropdown Selection */}
+          <div className="space-y-1.5">
+            <label className="text-xs font-mono text-[#A1A1AA] uppercase block">Assigned Corridor Route</label>
+            <select
+              name="route"
+              value={formData.route}
+              onChange={handleInputChange}
+              className={`w-full px-3.5 py-2.5 text-xs bg-[#09090B] border rounded-lg text-[#FFFFFF] outline-none focus:border-[#F97316]/50 transition-all cursor-pointer ${
+                formErrors.route ? 'border-[#EF4444]' : 'border-[#27272A]'
+              }`}
+            >
+              {routes.map((rt) => (
+                <option key={rt._id} value={rt._id}>
+                  {rt.routeCode}: {rt.origin} to {rt.destination} (₱{rt.estimatedFare})
+                </option>
+              ))}
+            </select>
+            {formErrors.route && (
+              <p className="text-[10px] text-[#EF4444] mt-1 flex items-center gap-1 font-sans">
+                <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                <span>{formErrors.route}</span>
+              </p>
+            )}
+          </div>
+
+          {/* Departure Time Input (HH:MM string) */}
+          <div className="space-y-1.5">
+            <label className="text-xs font-mono text-[#A1A1AA] uppercase block">Departure Time (24-Hour Format)</label>
+            <input
+              type="time"
+              name="departureTime"
+              value={formData.departureTime}
+              onChange={handleInputChange}
+              className={`w-full px-3.5 py-2.5 text-xs bg-[#09090B] border rounded-lg text-[#FFFFFF] outline-none transition-all cursor-pointer ${
+                formErrors.departureTime ? 'border-[#EF4444] focus:border-[#EF4444]/50' : 'border-[#27272A] focus:border-[#F97316]/50'
+              }`}
+            />
+            {formErrors.departureTime && (
+              <p className="text-[10px] text-[#EF4444] mt-1 flex items-center gap-1">
+                <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                <span>{formErrors.departureTime}</span>
+              </p>
+            )}
+          </div>
+
+          {/* Status Selection */}
+          <div className="space-y-1.5">
+            <label className="text-xs font-mono text-[#A1A1AA] uppercase block">Operational Status</label>
+            <select
+              name="status"
+              value={formData.status}
+              onChange={handleInputChange}
+              className="w-full px-3.5 py-2.5 text-xs bg-[#09090B] border border-[#27272A] rounded-lg text-[#FFFFFF] outline-none focus:border-[#F97316]/50 transition-all cursor-pointer"
+            >
+              <option value="Active">Active</option>
+              <option value="Inactive">Inactive</option>
+            </select>
+          </div>
+
+          {/* Actions */}
+          <div className="flex gap-3 pt-4 border-t border-[#27272A]">
+            <button
+              type="button"
+              onClick={() => setIsEditOpen(false)}
+              className="flex-1 py-2.5 border border-[#27272A] hover:bg-[#18181B] text-xs font-semibold text-[#A1A1AA] hover:text-[#FFFFFF] rounded-lg transition-colors cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={submitLoading}
+              className="flex-1 py-2.5 bg-[#F97316] hover:bg-[#EA580C] text-xs font-semibold text-[#FFFFFF] rounded-lg shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+            >
+              {submitLoading ? (
+                <RefreshCw className="w-4 h-4 animate-spin" />
+              ) : (
+                <span>Update Schedule</span>
+              )}
+            </button>
+          </div>
+        </form>
+      </FormModal>
+
+      {/* Delete Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={isDeleteOpen}
+        onClose={() => setIsDeleteOpen(false)}
+        onConfirm={handleDeleteConfirm}
+        title="Delete Schedule Slot?"
+        message={selectedSchedule ? `This will permanently delete schedule slot ${selectedSchedule.scheduleCode} (${selectedSchedule.route ? selectedSchedule.route.origin + ' - ' + selectedSchedule.route.destination : 'Unknown'} at ${selectedSchedule.departureTime}) from the system records. Trips scheduled under this slot will become un-assigned. Continue?` : ''}
+        confirmText="Yes, delete schedule"
+        cancelText="Cancel"
+        type="danger"
+        isLoading={submitLoading}
+      />
+    </div>
+  );
+};
+
+export default Schedules;
