@@ -4,43 +4,15 @@ import Route from "../models/Route.js";
 import PassengerStatistic from "../models/PassengerStatistic.js";
 
 
-// =====================================
-// API KEY CHECK
-// =====================================
-
-const verifyApiKey = (req) => {
-
-  return (
-    req.headers["x-api-key"] ===
-    process.env.INTERNAL_API_KEY
-  );
-
-};
-
-
 
 // =====================================
 // SUMMARY API
 // GET /api/external/summary
 // =====================================
 
-export const getExternalSummary = async (req,res)=>{
+export const getExternalSummary = async (req, res) => {
 
   try {
-
-
-    if(!verifyApiKey(req)){
-
-      return res.status(401).json({
-
-        success:false,
-
-        message:"Unauthorized"
-
-      });
-
-    }
-
 
 
     const totalJeepneys =
@@ -194,7 +166,6 @@ export const getExternalSummary = async (req,res)=>{
         tripsByStatus:
           statusSummary
 
-
       }
 
     });
@@ -205,26 +176,21 @@ export const getExternalSummary = async (req,res)=>{
 
   catch(error){
 
-
-    console.error(
-      error
-    );
+    console.error(error);
 
 
     res.status(500).json({
 
       success:false,
 
-      message:
-        "Failed to generate summary"
+      message:"Failed to generate summary"
 
     });
 
-
   }
 
-
 };
+
 
 
 
@@ -237,23 +203,8 @@ export const getExternalSummary = async (req,res)=>{
 
 export const getExternalTransactions = async (req,res)=>{
 
+
   try{
-
-
-    if(!verifyApiKey(req)){
-
-
-      return res.status(401).json({
-
-        success:false,
-
-        message:"Unauthorized"
-
-      });
-
-
-    }
-
 
 
     const trips = await Trip.find()
@@ -279,6 +230,7 @@ export const getExternalTransactions = async (req,res)=>{
 
 
 
+
     const transactions = trips.map(trip=>({
 
 
@@ -295,31 +247,46 @@ export const getExternalTransactions = async (req,res)=>{
 
 
       route:
+
         trip.route
-        ? 
+
+        ?
+
         `${trip.route.origin} - ${trip.route.destination}`
+
         :
+
         null,
+
 
 
       jeepney:
+
         trip.jeepney
+
         ?
+
         trip.jeepney.plateNumber
+
         :
+
         null,
+
 
 
       passengerCount:
         trip.passengerCount,
 
 
+
       amount:
         trip.estimatedRevenue,
 
 
+
       status:
         trip.status,
+
 
 
       timestamp:
@@ -331,12 +298,12 @@ export const getExternalTransactions = async (req,res)=>{
 
 
 
+
     res.json({
 
       success:true,
 
-      data:
-        transactions
+      data:transactions
 
     });
 
@@ -347,17 +314,15 @@ export const getExternalTransactions = async (req,res)=>{
   catch(error){
 
 
-    console.error(
-      error
-    );
+    console.error(error);
+
 
 
     res.status(500).json({
 
       success:false,
 
-      message:
-        "Failed to fetch transactions"
+      message:"Failed to fetch transactions"
 
     });
 
