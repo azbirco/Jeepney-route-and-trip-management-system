@@ -100,15 +100,12 @@ const Trips = () => {
   };
 
   useEffect(() => {
-  const load = async () => {
-    await fetchData();
-  };
+    const load = async () => {
+      await fetchData();
+    };
 
-  load();
-
-}, []);
-
-  
+    load();
+  }, []);
 
   const triggerSuccess = (msg) => {
     setSuccessMsg(msg);
@@ -121,17 +118,36 @@ const Trips = () => {
   const handleRouteSelectChange = (e) => {
     const routeId = e.target.value;
     const matchingSchedules = schedules.filter(s => s.route && s.route._id === routeId);
-    const nextScheduleId = matchingSchedules.length > 0 ? matchingSchedules[0]._id : '';
+    const nextSchedule = matchingSchedules.length > 0 ? matchingSchedules[0] : null;
 
     setFormData(prev => ({
       ...prev,
       route: routeId,
-      schedule: nextScheduleId
+      schedule: nextSchedule ? nextSchedule._id : '',
+      actualDepartureTime: nextSchedule ? nextSchedule.departureTime : '',
+      actualArrivalTime: nextSchedule ? (nextSchedule.expectedArrivalTime || '') : ''
     }));
 
     if (formErrors.route) {
       setFormErrors(prev => ({ ...prev, route: null }));
     }
+    if (formErrors.schedule) {
+      setFormErrors(prev => ({ ...prev, schedule: null }));
+    }
+  };
+
+  // Auto-fill actual times as editable defaults when a schedule is picked directly
+  const handleScheduleSelectChange = (e) => {
+    const scheduleId = e.target.value;
+    const selectedSchedule = schedules.find(s => s._id === scheduleId);
+
+    setFormData(prev => ({
+      ...prev,
+      schedule: scheduleId,
+      actualDepartureTime: selectedSchedule ? selectedSchedule.departureTime : '',
+      actualArrivalTime: selectedSchedule ? (selectedSchedule.expectedArrivalTime || '') : ''
+    }));
+
     if (formErrors.schedule) {
       setFormErrors(prev => ({ ...prev, schedule: null }));
     }
@@ -288,15 +304,15 @@ const Trips = () => {
     const firstJeepneyId = jeepneys.length > 0 ? jeepneys[0]._id : '';
     const firstRouteId = routes.length > 0 ? routes[0]._id : '';
     const filteredSchedules = schedules.filter(s => s.route && s.route._id === firstRouteId);
-    const firstScheduleId = filteredSchedules.length > 0 ? filteredSchedules[0]._id : '';
+    const firstSchedule = filteredSchedules.length > 0 ? filteredSchedules[0] : null;
 
     setFormData({
       jeepney: firstJeepneyId,
       route: firstRouteId,
-      schedule: firstScheduleId,
+      schedule: firstSchedule ? firstSchedule._id : '',
       departureDate: new Date().toISOString().split('T')[0],
-      actualDepartureTime: '',
-      actualArrivalTime: '',
+      actualDepartureTime: firstSchedule ? firstSchedule.departureTime : '',
+      actualArrivalTime: firstSchedule ? (firstSchedule.expectedArrivalTime || '') : '',
       passengerCount: 0,
       status: 'Scheduled'
     });
@@ -652,7 +668,7 @@ const Trips = () => {
             <select
               name="schedule"
               value={formData.schedule}
-              onChange={handleInputChange}
+              onChange={handleScheduleSelectChange}
               disabled={!formData.route}
               className={`w-full px-3.5 py-2.5 text-xs bg-[#09090B] border rounded-lg text-[#FFFFFF] outline-none focus:border-[#F97316]/50 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
                 formErrors.schedule ? 'border-[#EF4444]' : 'border-[#27272A]'
@@ -876,7 +892,7 @@ const Trips = () => {
             <select
               name="schedule"
               value={formData.schedule}
-              onChange={handleInputChange}
+              onChange={handleScheduleSelectChange}
               disabled={!formData.route}
               className={`w-full px-3.5 py-2.5 text-xs bg-[#09090B] border rounded-lg text-[#FFFFFF] outline-none focus:border-[#F97316]/50 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
                 formErrors.schedule ? 'border-[#EF4444]' : 'border-[#27272A]'

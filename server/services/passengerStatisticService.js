@@ -21,6 +21,21 @@ export const createPassengerStatistic = async (
     throw new Error('Trip not found');
   }
 
+  const jeepney = trip.jeepney;
+  const route = trip.route;
+
+  const occupancyRate =
+    jeepney && jeepney.capacity
+      ? Number(
+          ((passengerCount / jeepney.capacity) * 100).toFixed(2)
+        )
+      : 0;
+
+  const estimatedRevenue =
+    route && route.estimatedFare
+      ? passengerCount * route.estimatedFare
+      : 0;
+
   let statistic = await PassengerStatistic.findOne({
     trip: tripId
   });
@@ -28,6 +43,8 @@ export const createPassengerStatistic = async (
   if (statistic) {
 
     statistic.passengerCount = passengerCount;
+    statistic.occupancyRate = occupancyRate;
+    statistic.estimatedRevenue = estimatedRevenue;
 
     await statistic.save();
 
@@ -39,7 +56,11 @@ export const createPassengerStatistic = async (
 
     trip: tripId,
 
-    passengerCount
+    passengerCount,
+
+    occupancyRate,
+
+    estimatedRevenue
 
   });
 

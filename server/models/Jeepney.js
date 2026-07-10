@@ -1,15 +1,16 @@
 import mongoose from 'mongoose';
 
-const jeepneySchema = new mongoose.Schema({
-
+const jeepneySchema = new mongoose.Schema(
+{
   jeepneyNumber: {
     type: String,
-    unique: true
+    unique: true,
+    trim: true
   },
 
   plateNumber: {
     type: String,
-    required: true,
+    required: [true, 'Plate number is required'],
     unique: true,
     uppercase: true,
     trim: true
@@ -26,8 +27,8 @@ const jeepneySchema = new mongoose.Schema({
 
   capacity: {
     type: Number,
-    required: true,
-    min: 1
+    required: [true, 'Capacity is required'],
+    min: [1, 'Capacity must be greater than zero']
   },
 
   status: {
@@ -40,27 +41,31 @@ const jeepneySchema = new mongoose.Schema({
     default: 'Available'
   }
 
-}, {
+},
+{
   timestamps: true
 });
 
 
-jeepneySchema.pre('save', async function (next) {
+// AUTO GENERATE JEEPNEY NUMBER
+jeepneySchema.pre('save', async function () {
 
   if (!this.isNew) {
-    return next();
+    return;
   }
+
 
   if (!this.jeepneyNumber) {
 
-    const count = await this.constructor.countDocuments();
+    const count = await mongoose
+      .model('Jeepney')
+      .countDocuments();
+
 
     this.jeepneyNumber =
       `JPU-${String(count + 1).padStart(3, '0')}`;
 
   }
-
-  next();
 
 });
 
@@ -71,5 +76,6 @@ const Jeepney =
     'Jeepney',
     jeepneySchema
   );
+
 
 export default Jeepney;

@@ -77,7 +77,7 @@ scheduleSchema.pre(
 
 'validate',
 
-async function(next){
+async function(){
 
 try{
 
@@ -110,13 +110,11 @@ route.estimatedTravelTime
 
 }
 
-next();
-
 }
 
 catch(err){
 
-next(err);
+throw err;
 
 }
 
@@ -129,11 +127,11 @@ scheduleSchema.pre(
 
 'save',
 
-async function(next){
+async function(){
 
 if(!this.isNew){
 
-return next();
+return;
 
 }
 
@@ -153,8 +151,6 @@ count+1
 ).padStart(3,'0')}`;
 
 }
-
-next();
 
 }
 

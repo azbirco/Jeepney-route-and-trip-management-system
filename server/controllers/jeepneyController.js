@@ -2,13 +2,31 @@ import Jeepney from '../models/Jeepney.js';
 import ActivityLog from '../models/ActivityLog.js';
 
 
-// Create Jeepney
+// CREATE JEEPNEY
 export const createJeepney = async (req, res) => {
 
   try {
 
-    const jeepney =
-      await Jeepney.create(req.body);
+    console.log("CREATE JEEPNEY REQUEST:");
+    console.log(req.body);
+
+
+    const jeepney = await Jeepney.create({
+
+      plateNumber: req.body.plateNumber,
+
+      type:
+        req.body.type || 'Traditional Jeepney',
+
+      capacity:
+        Number(req.body.capacity),
+
+      status:
+        req.body.status || 'Available'
+
+    });
+
+
 
     await ActivityLog.create({
 
@@ -23,38 +41,73 @@ export const createJeepney = async (req, res) => {
 
     });
 
+
+
     res.status(201).json({
 
-      success: true,
+      success:true,
 
-      message: 'Jeepney created successfully',
+      message:
+        'Jeepney created successfully',
 
       data: jeepney
 
     });
 
-  }
 
-  catch (error) {
 
-    if (error.code === 11000) {
+  } catch(error) {
+
+
+    console.error(
+      "CREATE JEEPNEY ERROR:",
+      error
+    );
+
+
+
+    if(error.code === 11000){
+
+      const field =
+        Object.keys(error.keyPattern)[0];
+
 
       return res.status(400).json({
 
-        success: false,
+        success:false,
 
         message:
-          'Plate number must be unique.'
+          `${field} already exists.`
 
       });
 
     }
 
-    res.status(400).json({
 
-      success: false,
 
-      message: error.message
+    if(error.name === "ValidationError"){
+
+      return res.status(400).json({
+
+        success:false,
+
+        message:
+          Object.values(error.errors)
+          .map(err => err.message)
+          .join(", ")
+
+      });
+
+    }
+
+
+
+    res.status(500).json({
+
+      success:false,
+
+      message:
+        "Server error while creating jeepney."
 
     });
 
@@ -65,100 +118,76 @@ export const createJeepney = async (req, res) => {
 
 
 
-// Get Jeepneys
-export const getJeepneys = async (req, res) => {
+// GET ALL JEEPNEYS
+export const getJeepneys = async (req,res)=>{
 
-  try {
+  try{
 
     const {
-
       search,
-
       status,
-
       type
-
     } = req.query;
 
 
     const query = {};
 
 
-    if (status) {
-
+    if(status){
       query.status = status;
-
     }
 
 
-    if (type) {
-
+    if(type){
       query.type = type;
-
     }
+
 
 
     let jeepneys =
       await Jeepney.find(query)
-
       .sort({
-
-        createdAt: -1
-
+        createdAt:-1
       });
 
 
-    if (search) {
+
+    if(search){
 
       const regex =
-        new RegExp(search, 'i');
+        new RegExp(search,'i');
 
 
       jeepneys =
         jeepneys.filter(j =>
-
-          regex.test(
-
-            j.plateNumber || ''
-
-          ) ||
-
-          regex.test(
-
-            j.jeepneyNumber || ''
-
-          ) ||
-
-          regex.test(
-
-            j.type || ''
-
-          )
-
+          regex.test(j.plateNumber || '') ||
+          regex.test(j.jeepneyNumber || '') ||
+          regex.test(j.type || '')
         );
 
     }
 
 
+
     res.status(200).json({
 
-      success: true,
+      success:true,
 
-      count: jeepneys.length,
+      count:jeepneys.length,
 
-      data: jeepneys
+      data:jeepneys
 
     });
 
-  }
 
-  catch (error) {
+
+  }catch(error){
 
     res.status(500).json({
 
-      success: false,
+      success:false,
 
-      message: error.message
+      message:error.message
 
     });
 
@@ -169,50 +198,50 @@ export const getJeepneys = async (req, res) => {
 
 
 
-// Get Jeepney By Id
-export const getJeepneyById = async (req, res) => {
+// GET JEEPNEY BY ID
+export const getJeepneyById = async(req,res)=>{
 
-  try {
+  try{
+
 
     const jeepney =
-      await Jeepney.findById(
-
-        req.params.id
-
-      );
+      await Jeepney.findById(req.params.id);
 
 
-    if (!jeepney) {
+
+    if(!jeepney){
 
       return res.status(404).json({
 
-        success: false,
+        success:false,
 
         message:
-          'Jeepney not found'
+          "Jeepney not found"
 
       });
 
     }
 
 
+
     res.status(200).json({
 
-      success: true,
+      success:true,
 
-      data: jeepney
+      data:jeepney
 
     });
 
-  }
 
-  catch (error) {
+
+  }catch(error){
+
 
     res.status(500).json({
 
-      success: false,
+      success:false,
 
-      message: error.message
+      message:error.message
 
     });
 
@@ -223,10 +252,11 @@ export const getJeepneyById = async (req, res) => {
 
 
 
-// Update Jeepney
-export const updateJeepney = async (req, res) => {
+// UPDATE JEEPNEY
+export const updateJeepney = async(req,res)=>{
 
-  try {
+  try{
+
 
     const jeepney =
       await Jeepney.findByIdAndUpdate(
@@ -236,78 +266,87 @@ export const updateJeepney = async (req, res) => {
         req.body,
 
         {
-
-          new: true,
-
-          runValidators: true
-
+          new:true,
+          runValidators:true
         }
 
       );
 
 
-    if (!jeepney) {
+
+    if(!jeepney){
 
       return res.status(404).json({
 
-        success: false,
+        success:false,
 
         message:
-          'Jeepney not found'
+          "Jeepney not found"
 
       });
 
     }
+
 
 
     await ActivityLog.create({
 
-      user: req.user?._id,
+      user:req.user?._id,
 
-      action: 'Update Jeepney',
+      action:
+        "Update Jeepney",
 
       details:
         `Updated jeepney ${jeepney.plateNumber}`,
 
-      ipAddress: req.ip
+      ipAddress:req.ip
 
     });
+
 
 
     res.status(200).json({
 
-      success: true,
+      success:true,
 
       message:
-        'Jeepney updated successfully',
+        "Jeepney updated successfully",
 
-      data: jeepney
+      data:jeepney
 
     });
 
-  }
 
-  catch (error) {
 
-    if (error.code === 11000) {
+  }catch(error){
+
+
+    console.error(
+      "UPDATE JEEPNEY ERROR:",
+      error
+    );
+
+
+    if(error.code === 11000){
 
       return res.status(400).json({
 
-        success: false,
+        success:false,
 
         message:
-          'Plate number must be unique.'
+          "Plate number already exists."
 
       });
 
     }
 
 
+
     res.status(400).json({
 
-      success: false,
+      success:false,
 
-      message: error.message
+      message:error.message
 
     });
 
@@ -318,65 +357,75 @@ export const updateJeepney = async (req, res) => {
 
 
 
-// Delete Jeepney
-export const deleteJeepney = async (req, res) => {
+// DELETE JEEPNEY
+export const deleteJeepney = async(req,res)=>{
 
-  try {
+  try{
+
 
     const jeepney =
       await Jeepney.findByIdAndDelete(
-
         req.params.id
-
       );
 
 
-    if (!jeepney) {
+
+    if(!jeepney){
 
       return res.status(404).json({
 
-        success: false,
+        success:false,
 
         message:
-          'Jeepney not found'
+          "Jeepney not found"
 
       });
 
     }
 
 
+
     await ActivityLog.create({
 
-      user: req.user?._id,
+      user:req.user?._id,
 
-      action: 'Delete Jeepney',
+      action:
+        "Delete Jeepney",
 
       details:
         `Deleted jeepney ${jeepney.plateNumber}`,
 
-      ipAddress: req.ip
+      ipAddress:req.ip
 
     });
+
 
 
     res.status(200).json({
 
-      success: true,
+      success:true,
 
       message:
-        'Jeepney deleted successfully'
+        "Jeepney deleted successfully"
 
     });
 
-  }
 
-  catch (error) {
+
+  }catch(error){
+
+
+    console.error(
+      "DELETE JEEPNEY ERROR:",
+      error
+    );
+
 
     res.status(500).json({
 
-      success: false,
+      success:false,
 
-      message: error.message
+      message:error.message
 
     });
 

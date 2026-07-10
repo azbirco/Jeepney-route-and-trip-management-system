@@ -30,9 +30,19 @@ schedule:{
  required:true
 },
 
-tripDate:{
+departureDate:{
  type:Date,
  default:Date.now
+},
+
+actualDepartureTime:{
+ type:String,
+ default:''
+},
+
+actualArrivalTime:{
+ type:String,
+ default:''
 },
 
 passengerCount:{
@@ -49,9 +59,8 @@ status:{
  type:String,
  enum:[
  'Scheduled',
- 'Boarding',
- 'In Transit',
- 'Completed',
+ 'Departed',
+ 'Arrived',
  'Cancelled'
  ],
  default:'Scheduled'
@@ -67,7 +76,7 @@ tripSchema.pre(
 
 'save',
 
-async function(next){
+async function(){
 
 if(!this.tripCode){
 
@@ -80,8 +89,6 @@ this.tripCode=
 `TR-${String(count+1).padStart(5,'0')}`;
 
 }
-
-next();
 
 }
 

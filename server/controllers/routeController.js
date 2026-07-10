@@ -2,46 +2,122 @@ import Route from '../models/Route.js';
 import ActivityLog from '../models/ActivityLog.js';
 
 
-// @desc    Create Route
-// @route   POST /api/routes
-// @access  Private
+// CREATE ROUTE
 export const createRoute = async (req, res) => {
 
   try {
 
-    const route = await Route.create(req.body);
+    const {
+      origin,
+      destination,
+      estimatedTravelTime,
+      estimatedFare,
+      status
+    } = req.body;
 
-    await ActivityLog.create({
-      user: req.user?._id,
-      action: 'Create Route',
-      details: `Created route ${route.origin} - ${route.destination}`,
-      ipAddress: req.ip
+
+    const route = await Route.create({
+
+      origin,
+
+      destination,
+
+      estimatedTravelTime:
+        Number(estimatedTravelTime),
+
+      estimatedFare:
+        Number(estimatedFare),
+
+      status:
+        status || 'Active'
+
     });
+
+
+    try {
+
+      await ActivityLog.create({
+
+        user: req.user?._id,
+
+        action: 'Create Route',
+
+        details:
+          `Created route ${route.origin} - ${route.destination}`,
+
+        ipAddress: req.ip
+
+      });
+
+    } catch(logError) {
+
+      console.error(
+        "ACTIVITY LOG ERROR:",
+        logError
+      );
+
+    }
+
 
     res.status(201).json({
+
       success: true,
+
       message: 'Route created successfully',
+
       data: route
+
     });
 
-  }
 
-  catch (error) {
+  } catch(error) {
 
-    if (error.code === 11000) {
+
+    console.error(
+      "CREATE ROUTE ERROR:",
+      error
+    );
+
+
+    if(error.code === 11000){
 
       return res.status(400).json({
-        success: false,
+
+        success:false,
+
         message:
-          'A route with this origin and destination already exists.'
+          "This route already exists."
+
       });
 
     }
 
-    res.status(400).json({
-      success: false,
-      message: error.message
+
+    if(error.name === "ValidationError"){
+
+      return res.status(400).json({
+
+        success:false,
+
+        message:
+          Object.values(error.errors)
+          .map(err => err.message)
+          .join(", ")
+
+      });
+
+    }
+
+
+    res.status(500).json({
+
+      success:false,
+
+      message:
+        "Server error while creating route."
+
     });
+
 
   }
 
@@ -49,47 +125,59 @@ export const createRoute = async (req, res) => {
 
 
 
-// @desc    Get Routes
-// @route   GET /api/routes
-// @access  Private
-export const getRoutes = async (req, res) => {
+
+// GET ALL ROUTES
+export const getRoutes = async (req,res)=>{
 
   try {
 
-    const { search, origin, destination } = req.query;
+
+    const {
+      search,
+      origin,
+      destination
+    } = req.query;
+
 
     const query = {};
 
-    if (origin) {
+
+    if(origin){
+
       query.origin = origin;
+
     }
 
-    if (destination) {
+
+    if(destination){
+
       query.destination = destination;
+
     }
 
-    if (search) {
+
+    if(search){
 
       query.$or = [
 
         {
-          origin: {
-            $regex: search,
-            $options: 'i'
+          routeCode:{
+            $regex:search,
+            $options:'i'
           }
         },
 
         {
-          destination: {
-            $regex: search,
-            $options: 'i'
+          origin:{
+            $regex:search,
+            $options:'i'
           }
         },
 
         {
-          routeCode: {
-            $regex: search,
-            $options: 'i'
+          destination:{
+            $regex:search,
+            $options:'i'
           }
         }
 
@@ -97,226 +185,324 @@ export const getRoutes = async (req, res) => {
 
     }
 
-    const routes = await Route.find(query)
-      .sort({ createdAt: -1 });
+
+    const routes =
+      await Route.find(query)
+      .sort({
+        createdAt:-1
+      });
+
+
 
     res.status(200).json({
 
-      success: true,
+      success:true,
 
-      count: routes.length,
+      count:routes.length,
 
-      data: routes
+      data:routes
 
     });
 
-  }
 
-  catch (error) {
+
+  } catch(error) {
+
 
     res.status(500).json({
 
-      success: false,
+      success:false,
 
-      message: error.message
+      message:error.message
 
     });
+
 
   }
 
 };
 
 
-// @desc    Get Route by ID
-// @route   GET /api/routes/:id
-// @access  Private
-export const getRouteById = async (req, res) => {
+
+
+// GET ROUTE BY ID
+export const getRouteById = async(req,res)=>{
 
   try {
 
-    const route = await Route.findById(
-      req.params.id
-    );
 
-    if (!route) {
+    const route =
+      await Route.findById(
+        req.params.id
+      );
+
+
+    if(!route){
 
       return res.status(404).json({
 
-        success: false,
+        success:false,
 
-        message: 'Route not found'
+        message:"Route not found"
 
       });
 
     }
 
+
     res.status(200).json({
 
-      success: true,
+      success:true,
 
-      data: route
+      data:route
 
     });
 
-  }
 
-  catch (error) {
+
+  } catch(error) {
+
 
     res.status(500).json({
 
-      success: false,
+      success:false,
 
-      message: error.message
+      message:error.message
 
     });
+
 
   }
 
 };
 
 
-// @desc    Update Route
-// @route   PUT /api/routes/:id
-// @access  Private
-export const updateRoute = async (req, res) => {
+
+
+// UPDATE ROUTE
+export const updateRoute = async(req,res)=>{
 
   try {
+
 
     const route =
       await Route.findByIdAndUpdate(
 
         req.params.id,
 
-        req.body,
+        {
+
+          origin:req.body.origin,
+
+          destination:req.body.destination,
+
+          estimatedTravelTime:
+            Number(req.body.estimatedTravelTime),
+
+          estimatedFare:
+            Number(req.body.estimatedFare),
+
+          status:req.body.status
+
+        },
 
         {
-          new: true,
-          runValidators: true
+
+          new:true,
+
+          runValidators:true
+
         }
 
       );
 
-    if (!route) {
+
+
+    if(!route){
 
       return res.status(404).json({
 
-        success: false,
+        success:false,
 
-        message: 'Route not found'
+        message:"Route not found"
 
       });
 
     }
 
-    await ActivityLog.create({
 
-      user: req.user?._id,
 
-      action: 'Update Route',
+    try {
 
-      details:
-        `Updated route ${route.origin} - ${route.destination}`,
+      await ActivityLog.create({
 
-      ipAddress: req.ip
+        user:req.user?._id,
 
-    });
+        action:'Update Route',
+
+        details:
+          `Updated route ${route.origin} - ${route.destination}`,
+
+        ipAddress:req.ip
+
+      });
+
+
+    } catch(logError){
+
+      console.error(
+        "ACTIVITY LOG ERROR:",
+        logError
+      );
+
+    }
+
+
 
     res.status(200).json({
 
-      success: true,
+      success:true,
 
-      message: 'Route updated successfully',
+      message:"Route updated successfully",
 
-      data: route
+      data:route
 
     });
 
-  }
 
-  catch (error) {
 
-    if (error.code === 11000) {
+  } catch(error) {
+
+
+    console.error(
+      "UPDATE ROUTE ERROR:",
+      error
+    );
+
+
+    if(error.code === 11000){
 
       return res.status(400).json({
 
-        success: false,
+        success:false,
 
         message:
-          'A route with this origin and destination already exists.'
+          "This route already exists."
 
       });
 
     }
 
-    res.status(400).json({
 
-      success: false,
 
-      message: error.message
+    if(error.name === "ValidationError"){
+
+      return res.status(400).json({
+
+        success:false,
+
+        message:
+          Object.values(error.errors)
+          .map(err=>err.message)
+          .join(", ")
+
+      });
+
+    }
+
+
+
+    res.status(500).json({
+
+      success:false,
+
+      message:error.message
 
     });
+
 
   }
 
 };
 
 
-// @desc    Delete Route
-// @route   DELETE /api/routes/:id
-// @access  Private
-export const deleteRoute = async (req, res) => {
+
+
+// DELETE ROUTE
+export const deleteRoute = async(req,res)=>{
 
   try {
+
 
     const route =
       await Route.findByIdAndDelete(
         req.params.id
       );
 
-    if (!route) {
+
+    if(!route){
 
       return res.status(404).json({
 
-        success: false,
+        success:false,
 
-        message: 'Route not found'
+        message:"Route not found"
 
       });
 
     }
 
-    await ActivityLog.create({
 
-      user: req.user?._id,
 
-      action: 'Delete Route',
+    try {
 
-      details:
-        `Deleted route ${route.origin} - ${route.destination}`,
+      await ActivityLog.create({
 
-      ipAddress: req.ip
+        user:req.user?._id,
 
-    });
+        action:"Delete Route",
+
+        details:
+          `Deleted route ${route.origin} - ${route.destination}`,
+
+        ipAddress:req.ip
+
+      });
+
+
+    } catch(logError){
+
+      console.error(
+        "ACTIVITY LOG ERROR:",
+        logError
+      );
+
+    }
+
+
 
     res.status(200).json({
 
-      success: true,
+      success:true,
 
-      message: 'Route deleted successfully'
+      message:
+        "Route deleted successfully"
 
     });
 
-  }
 
-  catch (error) {
+
+  } catch(error) {
+
 
     res.status(500).json({
 
-      success: false,
+      success:false,
 
-      message: error.message
+      message:error.message
 
     });
+
 
   }
 

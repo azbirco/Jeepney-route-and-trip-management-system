@@ -13,6 +13,10 @@ import {
 } from 'lucide-react';
 import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
+import FormModal from "../layouts/common/FormModal";
+import ConfirmationModal from "../layouts/common/ConfirmationModal";
+import ScheduleTable from "../layouts/tables/ScheduleTable";
+
 
 const Schedules = () => {
   const { user } = useAuth();
@@ -242,35 +246,55 @@ const Schedules = () => {
   const inactiveSchedules = schedules.filter((s) => s.status === 'Inactive').length;
 
   // Filter & Search & Sort routing data
-  const filteredSchedules = schedules
-    .filter((sched) => {
-      const query = searchQuery.toLowerCase().trim();
-      const matchesSearch =
-        query === '' ||
-        (sched.scheduleCode && sched.scheduleCode.toLowerCase().includes(query)) ||
-        (sched.departureTime && sched.departureTime.includes(query)) ||
-        (sched.route &&
-          (sched.route.origin.toLowerCase().includes(query) ||
-            sched.route.destination.toLowerCase().includes(query) ||
-            sched.route.routeCode.toLowerCase().includes(query)));
+const filteredSchedules = schedules
+  .filter((sched) => {
+    const query = searchQuery.toLowerCase().trim();
 
-      const matchesStatus = statusFilter === 'All' || sched.status === statusFilter;
+    const matchesSearch =
+      query === "" ||
+      sched.scheduleCode?.toLowerCase().includes(query) ||
+      sched.departureTime?.includes(query) ||
+      sched.expectedArrivalTime?.includes(query) ||
+      sched.route?.routeCode?.toLowerCase().includes(query) ||
+      sched.route?.origin?.toLowerCase().includes(query) ||
+      sched.route?.destination?.toLowerCase().includes(query);
 
-      return matchesSearch && matchesStatus;
-    })
-    .sort((a, b) => {
-      let valA = a[sortBy];
-      let valB = b[sortBy];
+    const matchesStatus =
+      statusFilter === "All" ||
+      sched.status === statusFilter;
 
-      if (typeof valA === 'string') {
-        valA = valA.toLowerCase();
-        valB = valB.toLowerCase();
-      }
+    return matchesSearch && matchesStatus;
+  })
+  .sort((a, b) => {
+    let valA;
+    let valB;
 
-      if (valA < valB) return sortOrder === 'asc' ? -1 : 1;
-      if (valA > valB) return sortOrder === 'asc' ? 1 : -1;
-      return 0;
-    });
+    switch (sortBy) {
+      case "route":
+        valA = `${a.route?.origin || ""}${a.route?.destination || ""}`;
+        valB = `${b.route?.origin || ""}${b.route?.destination || ""}`;
+        break;
+
+      case "expectedArrivalTime":
+        valA = a.expectedArrivalTime || "";
+        valB = b.expectedArrivalTime || "";
+        break;
+
+      default:
+        valA = a[sortBy] || "";
+        valB = b[sortBy] || "";
+    }
+
+    if (typeof valA === "string") valA = valA.toLowerCase();
+    if (typeof valB === "string") valB = valB.toLowerCase();
+
+    if (valA < valB) return sortOrder === "asc" ? -1 : 1;
+    if (valA > valB) return sortOrder === "asc" ? 1 : -1;
+
+    return 0;
+  });
+
+   
 
   return (
     <div className="space-y-8 select-none">
@@ -460,13 +484,13 @@ const Schedules = () => {
           </div>
         ) : (
           <ScheduleTable
-            schedules={filteredSchedules}
-            onEdit={openEditModal}
-            onDelete={openDeleteModal}
-            sortBy={sortBy}
-            sortOrder={sortOrder}
-            onSort={handleSort}
-          />
+  schedules={filteredSchedules}
+  onEdit={openEditModal}
+  onDelete={openDeleteModal}
+  sortBy={sortBy}
+  sortOrder={sortOrder}
+  onSort={handleSort}
+/>
         )}
       </div>
 

@@ -137,40 +137,31 @@ status:1
 
 
 routeSchema.pre(
-
 'save',
-
-async function(next){
+async function(){
 
 if(!this.isNew){
 
-return next();
+return;
 
 }
+
 
 if(!this.routeCode){
 
 const count =
+await this.constructor.countDocuments();
 
-await this.constructor
-
-.countDocuments();
 
 this.routeCode =
-
 `RTE-${String(
-
-count+1
-
+count + 1
 ).padStart(3,'0')}`;
 
 }
 
-next();
 
-}
-
-);
+});
 
 
 const Route =

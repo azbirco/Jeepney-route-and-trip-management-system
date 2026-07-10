@@ -3,6 +3,7 @@ import Jeepney from '../models/Jeepney.js';
 import Route from '../models/Route.js';
 import Schedule from '../models/Schedule.js';
 import ActivityLog from '../models/ActivityLog.js';
+import passengerStatisticService from '../services/passengerStatisticService.js';
 
 
 // Create Trip
@@ -71,6 +72,13 @@ export const createTrip = async (req, res) => {
 
     const trip =
       await Trip.create(req.body);
+
+
+    // Auto-create the passenger statistic record for this trip
+    await passengerStatisticService.createPassengerStatistic(
+      trip._id,
+      trip.passengerCount || 0
+    );
 
 
     const populatedTrip =
@@ -343,6 +351,13 @@ export const updateTrip = async (req, res) => {
       });
 
     }
+
+
+    // Keep the passenger statistic in sync with the updated trip
+    await passengerStatisticService.createPassengerStatistic(
+      trip._id,
+      trip.passengerCount || 0
+    );
 
 
     await ActivityLog.create({
