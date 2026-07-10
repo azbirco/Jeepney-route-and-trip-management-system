@@ -211,7 +211,7 @@ export const getExternalTransactions = async (req,res)=>{
 
       .populate(
         "route",
-        "routeName origin destination"
+        "routeName origin destination fare"
       )
 
       .populate(
@@ -276,6 +276,20 @@ export const getExternalTransactions = async (req,res)=>{
 
       passengerCount:
         trip.passengerCount,
+
+
+
+      fare:
+
+        trip.route
+
+        ?
+
+        trip.route.fare
+
+        :
+
+        null,
 
 
 

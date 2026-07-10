@@ -18,6 +18,16 @@ import FormModal from '../layouts/common/FormModal';
 import ConfirmationModal from '../layouts/common/ConfirmationModal';
 import { useAuth } from '../context/AuthContext';
 
+// Revenue is a derived value (passengerCount * route fare), only counted
+// once a trip has actually completed ("Arrived") — mirrors the same rule
+// used in the Revenue Summary Report on the backend.
+const getTripEstimatedRevenue = (trip) => {
+  if (!trip || trip.status !== 'Arrived') return 0;
+  const fare = trip.route?.estimatedFare || 0;
+  const passengers = trip.passengerCount || 0;
+  return passengers * fare;
+};
+
 const Trips = () => {
   const { user } = useAuth();
   const isAdmin = user?.role === 'Admin';
@@ -333,7 +343,7 @@ const Trips = () => {
   const totalTrips = trips.length;
   const departedTrips = trips.filter(t => t.status === 'Departed').length;
   const arrivedTrips = trips.filter(t => t.status === 'Arrived').length;
-  const totalEstRevenue = trips.reduce((acc, t) => acc + (t.estimatedRevenue || 0), 0);
+  const totalEstRevenue = trips.reduce((acc, t) => acc + getTripEstimatedRevenue(t), 0);
 
   // List of matching schedules based on currently selected route in form
   const currentFormRouteSchedules = schedules.filter(s => s.route && s.route._id === formData.route);
@@ -483,7 +493,7 @@ const Trips = () => {
             <h4 className="text-2xl font-black text-emerald-400 font-mono">
               ₱{loading ? '...' : totalEstRevenue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </h4>
-            <span className="text-[10px] text-[#A1A1AA] mt-0.5 block">Summed estimated revenue</span>
+            <span className="text-[10px] text-[#A1A1AA] mt-0.5 block">Summed estimated revenue (Arrived trips)</span>
           </div>
         </div>
       </div>
@@ -1041,7 +1051,7 @@ const Trips = () => {
         onClose={() => setIsDeleteOpen(false)}
         onConfirm={handleDeleteConfirm}
         title="Delete Trip Dispatch Record?"
-        message={selectedTrip ? `This will permanently delete trip dispatch record ${selectedTrip.tripCode} from the system logging registry. All passenger counts, times, and estimated revenue records (₱${Number(selectedTrip.estimatedRevenue || 0).toFixed(2)}) associated with this run will be deleted. Continue?` : ''}
+        message={selectedTrip ? `This will permanently delete trip dispatch record ${selectedTrip.tripCode} from the system logging registry. All passenger counts, times, and estimated revenue records (₱${getTripEstimatedRevenue(selectedTrip).toFixed(2)}) associated with this run will be deleted. Continue?` : ''}
         confirmText="Yes, delete trip"
         cancelText="Cancel"
         type="danger"
