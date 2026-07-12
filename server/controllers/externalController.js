@@ -51,7 +51,7 @@ export const getExternalSummary = async (req, res) => {
 
         {
           $match:{
-            status:"Completed"
+            status:"Arrived"
           }
         },
 
@@ -112,11 +112,9 @@ export const getExternalSummary = async (req, res) => {
 
       Scheduled:0,
 
-      Boarding:0,
+      Departed:0,
 
-      "In Transit":0,
-
-      Completed:0,
+      Arrived:0,
 
       Cancelled:0
 

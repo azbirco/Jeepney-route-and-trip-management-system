@@ -17,6 +17,7 @@ import externalRoutes from "./routes/externalRoutes.js";
 import { seedInitialData } from "./utils/seeder.js";
 import dashboardRoutes from "./routes/dashboardRoutes.js";
 import activityLogRoutes from "./routes/activityLogRoutes.js";
+import userRoutes from './routes/userRoutes.js';
 
 
 dotenv.config();
@@ -69,6 +70,8 @@ app.use(
   "/api/activity-logs",
   activityLogRoutes
 );
+
+app.use('/api/users', userRoutes);
 
 
 
@@ -162,7 +165,7 @@ app.use(
 
 
 app.use(
-  "/api/sync",
+  "/api/synchronization",
   syncRoutes
 );
 

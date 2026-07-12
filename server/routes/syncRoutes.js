@@ -20,8 +20,7 @@ router.get(
   '/logs',
   protect,
   authorize(
-    'Admin',
-    'Terminal Personnel'
+    'Admin'
   ),
   getSynchronizationLogs
 );
@@ -29,13 +28,12 @@ router.get(
 
 
 
-// Sync reports
+// Sync reports (manual, admin override)
 router.post(
   '/sync-summaries',
   protect,
   authorize(
-    'Admin',
-    'Terminal Personnel'
+    'Admin'
   ),
   sendSummaryReports
 );
@@ -43,13 +41,12 @@ router.post(
 
 
 
-// Sync transaction records
+// Sync transaction records (manual, admin override)
 router.post(
   '/sync-transactions',
   protect,
   authorize(
-    'Admin',
-    'Terminal Personnel'
+    'Admin'
   ),
   sendTransactionRecords
 );
@@ -62,8 +59,7 @@ router.post(
   '/retry/:id',
   protect,
   authorize(
-    'Admin',
-    'Terminal Personnel'
+    'Admin'
   ),
   retrySynchronization
 );

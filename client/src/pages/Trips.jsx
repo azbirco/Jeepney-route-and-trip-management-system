@@ -10,7 +10,8 @@ import {
   X,
   Clock,
   DollarSign,
-  AlertTriangle
+  AlertTriangle,
+  BellRing
 } from 'lucide-react';
 import api from '../services/api';
 import TripTable from '../layouts/tables/TripTable';
@@ -18,9 +19,6 @@ import FormModal from '../layouts/common/FormModal';
 import ConfirmationModal from '../layouts/common/ConfirmationModal';
 import { useAuth } from '../context/AuthContext';
 
-// Revenue is a derived value (passengerCount * route fare), only counted
-// once a trip has actually completed ("Arrived") — mirrors the same rule
-// used in the Revenue Summary Report on the backend.
 const getTripEstimatedRevenue = (trip) => {
   if (!trip || trip.status !== 'Arrived') return 0;
   const fare = trip.route?.estimatedFare || 0;
@@ -31,34 +29,33 @@ const getTripEstimatedRevenue = (trip) => {
 const Trips = () => {
   const { user } = useAuth();
   const isAdmin = user?.role === 'Admin';
+  const isDriver = user?.role === 'Driver';
 
-  // Core registries
   const [trips, setTrips] = useState([]);
   const [jeepneys, setJeepneys] = useState([]);
   const [routes, setRoutes] = useState([]);
   const [schedules, setSchedules] = useState([]);
+  const [drivers, setDrivers] = useState([]);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [successMsg, setSuccessMsg] = useState(null);
 
-  // Filters & Search state
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
   const [sortBy, setSortBy] = useState('departureDate');
   const [sortOrder, setSortOrder] = useState('desc');
 
-  // Modals controller
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
 
-  // Form input state
   const [selectedTrip, setSelectedTrip] = useState(null);
   const [formData, setFormData] = useState({
     jeepney: '',
     route: '',
     schedule: '',
+    driver: '',
     departureDate: new Date().toISOString().split('T')[0],
     actualDepartureTime: '',
     actualArrivalTime: '',
@@ -68,39 +65,55 @@ const Trips = () => {
   const [formErrors, setFormErrors] = useState({});
   const [submitLoading, setSubmitLoading] = useState(false);
 
-  // Fetch all core resources
+  // Trips the Driver hasn't been notified about yet — captured BEFORE
+  // acknowledging, so the banner/badges on this render still show them.
+  const [driverNotifications, setDriverNotifications] = useState([]);
+
   const fetchData = async () => {
     setLoading(true);
     setError(null);
     try {
-      const [tripsRes, jeepneysRes, routesRes, schedulesRes] = await Promise.all([
+      if (isDriver) {
+        const tripsRes = await api.get('/trips');
+        if (tripsRes.data.success) {
+          const data = tripsRes.data.data;
+          setTrips(data);
+          setDriverNotifications(data.filter(t => !t.driverNotified));
+
+          // Acknowledge after capturing the snapshot above, so the sidebar
+          // badge clears for next time without hiding this visit's alerts.
+          const hasUnacknowledged = data.some(t => !t.driverNotified);
+          if (hasUnacknowledged) {
+            api.patch('/trips/acknowledge-notifications').catch(err => {
+              console.error('Error acknowledging notifications:', err);
+            });
+          }
+        }
+        return;
+      }
+
+      const [tripsRes, jeepneysRes, routesRes, schedulesRes, driversRes] = await Promise.all([
         api.get('/trips'),
         api.get('/jeepneys'),
         api.get('/routes'),
-        api.get('/schedules')
+        api.get('/schedules'),
+        api.get('/users/drivers')
       ]);
 
-      if (tripsRes.data.success) {
-        setTrips(tripsRes.data.data);
-      }
+      if (tripsRes.data.success) setTrips(tripsRes.data.data);
 
-      let activeJeepneys = [];
-      if (jeepneysRes.data.success) {
-        activeJeepneys = jeepneysRes.data.data;
-        setJeepneys(activeJeepneys);
-      }
+      if (jeepneysRes.data.success) setJeepneys(jeepneysRes.data.data);
 
-      let activeRoutes = [];
       if (routesRes.data.success) {
-        activeRoutes = routesRes.data.data.filter(r => r.status === 'Active' || !r.status);
-        setRoutes(activeRoutes);
+        setRoutes(routesRes.data.data.filter(r => r.status === 'Active' || !r.status));
       }
 
-      let activeSchedules = [];
       if (schedulesRes.data.success) {
-        activeSchedules = schedulesRes.data.data.filter(s => s.status === 'Active' || !s.status);
-        setSchedules(activeSchedules);
+        setSchedules(schedulesRes.data.data.filter(s => s.status === 'Active' || !s.status));
       }
+
+      if (driversRes.data.success) setDrivers(driversRes.data.data);
+
     } catch (err) {
       console.error('Error fetching trips resources:', err);
       setError(err.response?.data?.message || err.message || 'Unable to load trip operations registry.');
@@ -110,21 +123,15 @@ const Trips = () => {
   };
 
   useEffect(() => {
-    const load = async () => {
-      await fetchData();
-    };
-
+    const load = async () => { await fetchData(); };
     load();
   }, []);
 
   const triggerSuccess = (msg) => {
     setSuccessMsg(msg);
-    setTimeout(() => {
-      setSuccessMsg(null);
-    }, 4000);
+    setTimeout(() => setSuccessMsg(null), 4000);
   };
 
-  // Dynamically filter schedules dropdown when selected route changes
   const handleRouteSelectChange = (e) => {
     const routeId = e.target.value;
     const matchingSchedules = schedules.filter(s => s.route && s.route._id === routeId);
@@ -138,15 +145,10 @@ const Trips = () => {
       actualArrivalTime: nextSchedule ? (nextSchedule.expectedArrivalTime || '') : ''
     }));
 
-    if (formErrors.route) {
-      setFormErrors(prev => ({ ...prev, route: null }));
-    }
-    if (formErrors.schedule) {
-      setFormErrors(prev => ({ ...prev, schedule: null }));
-    }
+    if (formErrors.route) setFormErrors(prev => ({ ...prev, route: null }));
+    if (formErrors.schedule) setFormErrors(prev => ({ ...prev, schedule: null }));
   };
 
-  // Auto-fill actual times as editable defaults when a schedule is picked directly
   const handleScheduleSelectChange = (e) => {
     const scheduleId = e.target.value;
     const selectedSchedule = schedules.find(s => s._id === scheduleId);
@@ -158,12 +160,9 @@ const Trips = () => {
       actualArrivalTime: selectedSchedule ? (selectedSchedule.expectedArrivalTime || '') : ''
     }));
 
-    if (formErrors.schedule) {
-      setFormErrors(prev => ({ ...prev, schedule: null }));
-    }
+    if (formErrors.schedule) setFormErrors(prev => ({ ...prev, schedule: null }));
   };
 
-  // General field change handler
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({
@@ -171,32 +170,17 @@ const Trips = () => {
       [name]: name === 'passengerCount' ? (value === '' ? '' : Number(value)) : value
     }));
 
-    if (formErrors[name]) {
-      setFormErrors(prev => ({ ...prev, [name]: null }));
-    }
+    if (formErrors[name]) setFormErrors(prev => ({ ...prev, [name]: null }));
   };
 
-  // Validate form
   const validateForm = () => {
     const errors = {};
 
-    if (!formData.jeepney) {
-      errors.jeepney = 'A fleet jeepney must be assigned.';
-    }
+    if (!formData.jeepney) errors.jeepney = 'A fleet jeepney must be assigned.';
+    if (!formData.route) errors.route = 'A transit corridor route is required.';
+    if (!formData.schedule) errors.schedule = 'A departure schedule slot is required.';
+    if (!formData.departureDate) errors.departureDate = 'Departure operation date is required.';
 
-    if (!formData.route) {
-      errors.route = 'A transit corridor route is required.';
-    }
-
-    if (!formData.schedule) {
-      errors.schedule = 'A departure schedule slot is required.';
-    }
-
-    if (!formData.departureDate) {
-      errors.departureDate = 'Departure operation date is required.';
-    }
-
-    // Capacity verification
     if (formData.jeepney && (formData.passengerCount !== undefined && formData.passengerCount !== '')) {
       const selectedJeep = jeepneys.find(j => j._id === formData.jeepney);
       if (selectedJeep && formData.passengerCount > selectedJeep.capacity) {
@@ -206,7 +190,6 @@ const Trips = () => {
       }
     }
 
-    // Time format verification if provided
     const timeRegex = /^([01]\d|2[0-3]):([0-5]\d)$/;
     if (formData.actualDepartureTime && !timeRegex.test(formData.actualDepartureTime)) {
       errors.actualDepartureTime = 'Time must be in 24-hour HH:MM format.';
@@ -219,14 +202,14 @@ const Trips = () => {
     return Object.keys(errors).length === 0;
   };
 
-  // Add Trip
   const handleAddSubmit = async (e) => {
     e.preventDefault();
     if (!validateForm()) return;
 
     setSubmitLoading(true);
     try {
-      const response = await api.post('/trips', formData);
+      const payload = { ...formData, driver: formData.driver || null };
+      const response = await api.post('/trips', payload);
       if (response.data.success) {
         triggerSuccess(`Trip ${response.data.data.tripCode} scheduled successfully!`);
         setIsAddOpen(false);
@@ -241,14 +224,14 @@ const Trips = () => {
     }
   };
 
-  // Edit Trip
   const handleEditSubmit = async (e) => {
     e.preventDefault();
     if (!validateForm()) return;
 
     setSubmitLoading(true);
     try {
-      const response = await api.put(`/trips/${selectedTrip._id}`, formData);
+      const payload = { ...formData, driver: formData.driver || null };
+      const response = await api.put(`/trips/${selectedTrip._id}`, payload);
       if (response.data.success) {
         triggerSuccess(`Trip ${response.data.data.tripCode} updated successfully!`);
         setIsEditOpen(false);
@@ -263,7 +246,6 @@ const Trips = () => {
     }
   };
 
-  // Delete Confirm
   const handleDeleteConfirm = async () => {
     if (!selectedTrip) return;
     setSubmitLoading(true);
@@ -284,10 +266,63 @@ const Trips = () => {
     }
   };
 
-  const openAddModal = () => {
-    resetForm();
-    setIsAddOpen(true);
+  const handleStartTrip = async (trip) => {
+    setSubmitLoading(true);
+    try {
+      const nowTime = new Date().toTimeString().slice(0, 5);
+      const response = await api.patch(`/trips/${trip._id}/status`, {
+        status: 'Departed',
+        actualDepartureTime: nowTime
+      });
+      if (response.data.success) {
+        triggerSuccess(`Trip ${response.data.data.tripCode} marked as Departed!`);
+        fetchData();
+      }
+    } catch (err) {
+      console.error('Error starting trip:', err);
+      triggerSuccess(`Error: ${err.response?.data?.message || 'Could not start trip.'}`);
+    } finally {
+      setSubmitLoading(false);
+    }
   };
+
+  const handleMarkArrived = async (trip) => {
+    setSubmitLoading(true);
+    try {
+      const nowTime = new Date().toTimeString().slice(0, 5);
+      const response = await api.patch(`/trips/${trip._id}/status`, {
+        status: 'Arrived',
+        actualArrivalTime: nowTime
+      });
+      if (response.data.success) {
+        triggerSuccess(`Arrival reported for trip ${response.data.data.tripCode}! Waiting for Terminal Personnel confirmation.`);
+        fetchData();
+      }
+    } catch (err) {
+      console.error('Error reporting arrival:', err);
+      triggerSuccess(`Error: ${err.response?.data?.message || 'Could not report arrival.'}`);
+    } finally {
+      setSubmitLoading(false);
+    }
+  };
+
+  const handleConfirmArrival = async (trip) => {
+    setSubmitLoading(true);
+    try {
+      const response = await api.patch(`/trips/${trip._id}/confirm-arrival`);
+      if (response.data.success) {
+        triggerSuccess(`Arrival confirmed for trip ${response.data.data.tripCode}!`);
+        fetchData();
+      }
+    } catch (err) {
+      console.error('Error confirming arrival:', err);
+      triggerSuccess(`Error: ${err.response?.data?.message || 'Could not confirm arrival.'}`);
+    } finally {
+      setSubmitLoading(false);
+    }
+  };
+
+  const openAddModal = () => { resetForm(); setIsAddOpen(true); };
 
   const openEditModal = (trip) => {
     setSelectedTrip(trip);
@@ -295,6 +330,7 @@ const Trips = () => {
       jeepney: trip.jeepney ? trip.jeepney._id : '',
       route: trip.route ? trip.route._id : '',
       schedule: trip.schedule ? trip.schedule._id : '',
+      driver: trip.driver ? trip.driver._id : '',
       departureDate: trip.departureDate ? new Date(trip.departureDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
       actualDepartureTime: trip.actualDepartureTime || '',
       actualArrivalTime: trip.actualArrivalTime || '',
@@ -305,10 +341,7 @@ const Trips = () => {
     setIsEditOpen(true);
   };
 
-  const openDeleteModal = (trip) => {
-    setSelectedTrip(trip);
-    setIsDeleteOpen(true);
-  };
+  const openDeleteModal = (trip) => { setSelectedTrip(trip); setIsDeleteOpen(true); };
 
   const resetForm = () => {
     const firstJeepneyId = jeepneys.length > 0 ? jeepneys[0]._id : '';
@@ -320,6 +353,7 @@ const Trips = () => {
       jeepney: firstJeepneyId,
       route: firstRouteId,
       schedule: firstSchedule ? firstSchedule._id : '',
+      driver: '',
       departureDate: new Date().toISOString().split('T')[0],
       actualDepartureTime: firstSchedule ? firstSchedule.departureTime : '',
       actualArrivalTime: firstSchedule ? (firstSchedule.expectedArrivalTime || '') : '',
@@ -339,16 +373,15 @@ const Trips = () => {
     }
   };
 
-  // Stats computation
   const totalTrips = trips.length;
   const departedTrips = trips.filter(t => t.status === 'Departed').length;
   const arrivedTrips = trips.filter(t => t.status === 'Arrived').length;
   const totalEstRevenue = trips.reduce((acc, t) => acc + getTripEstimatedRevenue(t), 0);
 
-  // List of matching schedules based on currently selected route in form
+  const pendingArrivals = trips.filter(t => t.arrivalReported && t.status !== 'Arrived');
+
   const currentFormRouteSchedules = schedules.filter(s => s.route && s.route._id === formData.route);
 
-  // Filter & Search & Sort routing data
   const filteredTrips = trips
     .filter((trip) => {
       const query = searchQuery.toLowerCase().trim();
@@ -383,7 +416,7 @@ const Trips = () => {
 
   return (
     <div className="space-y-8 select-none">
-      {/* Top Banner Tagline */}
+
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-[#18181B] border border-[#27272A] p-4 rounded-xl relative overflow-hidden backdrop-blur-md">
         <div className="absolute right-0 top-0 translate-x-12 -translate-y-6 w-32 h-32 rounded-full bg-[#F97316]/5 blur-3xl pointer-events-none" />
         <div className="flex items-center gap-3">
@@ -391,11 +424,15 @@ const Trips = () => {
             <Calendar className="w-5 h-5 text-[#F97316]" />
           </div>
           <div>
-            <h3 className="text-sm font-semibold text-[#FFFFFF]">Daily Trip Dispatcher</h3>
-            <p className="text-xs text-[#A1A1AA] font-mono mt-0.5">Plan Routes. Manage Trips. Monitor Operations.</p>
+            <h3 className="text-sm font-semibold text-[#FFFFFF]">
+              {isDriver ? 'My Trips' : 'Daily Trip Dispatcher'}
+            </h3>
+            <p className="text-xs text-[#A1A1AA] font-mono mt-0.5">
+              {isDriver ? 'View and update the status of your assigned trips.' : 'Plan Routes. Manage Trips. Monitor Operations.'}
+            </p>
           </div>
         </div>
-        {!isAdmin && (
+        {!isAdmin && !isDriver && (
           <button
             onClick={openAddModal}
             disabled={routes.length === 0 || schedules.length === 0 || jeepneys.length === 0}
@@ -407,7 +444,6 @@ const Trips = () => {
         )}
       </div>
 
-      {/* Success alert banner */}
       <AnimatePresence>
         {successMsg && (
           <motion.div
@@ -422,8 +458,46 @@ const Trips = () => {
         )}
       </AnimatePresence>
 
-      {/* Missing prerequisites warning */}
-      {!loading && (routes.length === 0 || schedules.length === 0 || jeepneys.length === 0) && (
+      {/* Pending arrival confirmations banner — Terminal Personnel/Admin */}
+      {!isDriver && !loading && pendingArrivals.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-400 flex items-center gap-3 shadow-md"
+        >
+          <BellRing className="w-5 h-5 shrink-0 animate-pulse" />
+          <div className="flex-1 font-sans">
+            <strong>{pendingArrivals.length} trip{pendingArrivals.length > 1 ? 's' : ''}</strong>{' '}
+            {pendingArrivals.length > 1 ? 'have' : 'has'} been reported as arrived by the driver and{' '}
+            {pendingArrivals.length > 1 ? 'need' : 'needs'} your confirmation below.
+          </div>
+        </motion.div>
+      )}
+
+      {/* New assignment / cancellation banner — Driver only */}
+      {isDriver && !loading && driverNotifications.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-400 flex flex-col gap-1.5 shadow-md"
+        >
+          <div className="flex items-center gap-2">
+            <BellRing className="w-5 h-5 shrink-0" />
+            <strong className="font-bold">Trip Updates</strong>
+          </div>
+          <ul className="list-disc pl-7 space-y-1 font-sans">
+            {driverNotifications.map(t => (
+              <li key={t._id}>
+                {t.status === 'Cancelled'
+                  ? `Trip ${t.tripCode} (${t.route?.origin} → ${t.route?.destination}) has been cancelled.`
+                  : `Terminal Personnel has assigned/scheduled trip ${t.tripCode} (${t.route?.origin} → ${t.route?.destination}) for you.`}
+              </li>
+            ))}
+          </ul>
+        </motion.div>
+      )}
+
+      {!isDriver && !loading && (routes.length === 0 || schedules.length === 0 || jeepneys.length === 0) && (
         <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-400 flex flex-col gap-2 shadow-md">
           <div className="flex items-center gap-2">
             <AlertTriangle className="w-5 h-5 shrink-0" />
@@ -437,23 +511,20 @@ const Trips = () => {
         </div>
       )}
 
-      {/* Bento Stats Grid */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Total Trips */}
         <div className="bg-[#18181B] border border-[#27272A] p-4 rounded-xl flex flex-col justify-between h-28 relative overflow-hidden backdrop-blur-md">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-mono text-[#A1A1AA] uppercase">Total Dispatches</span>
+            <span className="text-xs font-mono text-[#A1A1AA] uppercase">{isDriver ? 'My Total Trips' : 'Total Dispatches'}</span>
             <div className="p-1 rounded bg-[#F97316]/5 border border-[#F97316]/10 text-[#F97316]">
               <Calendar className="w-4 h-4" />
             </div>
           </div>
           <div>
             <h4 className="text-2xl font-black text-[#FFFFFF] font-mono">{loading ? '...' : totalTrips}</h4>
-            <span className="text-[10px] text-[#A1A1AA] mt-0.5 block">Recorded Trip operations</span>
+            <span className="text-[10px] text-[#A1A1AA] mt-0.5 block">{isDriver ? 'Trips assigned to you' : 'Recorded Trip operations'}</span>
           </div>
         </div>
 
-        {/* Departed Trips */}
         <div className="bg-[#18181B] border border-[#27272A] p-4 rounded-xl flex flex-col justify-between h-28 relative overflow-hidden backdrop-blur-md">
           <div className="flex items-center justify-between">
             <span className="text-xs font-mono text-[#A1A1AA] uppercase">Departed Trips</span>
@@ -467,7 +538,6 @@ const Trips = () => {
           </div>
         </div>
 
-        {/* Arrived Trips */}
         <div className="bg-[#18181B] border border-[#27272A] p-4 rounded-xl flex flex-col justify-between h-28 relative overflow-hidden backdrop-blur-md">
           <div className="flex items-center justify-between">
             <span className="text-xs font-mono text-[#A1A1AA] uppercase">Arrived / Completed</span>
@@ -481,24 +551,24 @@ const Trips = () => {
           </div>
         </div>
 
-        {/* Estimated Revenue */}
-        <div className="bg-[#18181B] border border-[#27272A] p-4 rounded-xl flex flex-col justify-between h-28 relative overflow-hidden backdrop-blur-md">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-mono text-[#A1A1AA] uppercase">Est. Revenue</span>
-            <div className="p-1 rounded bg-emerald-500/5 border border-emerald-500/10 text-emerald-400">
-              <DollarSign className="w-4 h-4" />
+        {!isDriver && (
+          <div className="bg-[#18181B] border border-[#27272A] p-4 rounded-xl flex flex-col justify-between h-28 relative overflow-hidden backdrop-blur-md">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-mono text-[#A1A1AA] uppercase">Est. Revenue</span>
+              <div className="p-1 rounded bg-emerald-500/5 border border-emerald-500/10 text-emerald-400">
+                <DollarSign className="w-4 h-4" />
+              </div>
+            </div>
+            <div>
+              <h4 className="text-2xl font-black text-emerald-400 font-mono">
+                ₱{loading ? '...' : totalEstRevenue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </h4>
+              <span className="text-[10px] text-[#A1A1AA] mt-0.5 block">Summed estimated revenue (Arrived trips)</span>
             </div>
           </div>
-          <div>
-            <h4 className="text-2xl font-black text-emerald-400 font-mono">
-              ₱{loading ? '...' : totalEstRevenue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-            </h4>
-            <span className="text-[10px] text-[#A1A1AA] mt-0.5 block">Summed estimated revenue (Arrived trips)</span>
-          </div>
-        </div>
+        )}
       </div>
 
-      {/* Connection error */}
       {error && (
         <div className="p-4 rounded-xl bg-[#EF4444]/10 border border-[#EF4444]/20 text-xs text-[#EF4444] flex items-center gap-3">
           <AlertCircle className="w-5 h-5 shrink-0" />
@@ -514,10 +584,8 @@ const Trips = () => {
         </div>
       )}
 
-      {/* Control Board */}
       <div className="bg-[#18181B] border border-[#27272A] rounded-xl overflow-hidden backdrop-blur-md">
         <div className="p-4 border-b border-[#27272A] flex flex-col md:flex-row gap-4 justify-between items-stretch md:items-center">
-          {/* Search box */}
           <div className="relative flex-1 max-w-md">
             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#A1A1AA]" />
             <input
@@ -529,7 +597,6 @@ const Trips = () => {
             />
           </div>
 
-          {/* Filtering buttons */}
           <div className="flex flex-wrap items-center gap-3">
             <div className="flex items-center gap-1.5 bg-[#09090B] border border-[#27272A] px-2.5 py-1.5 rounded-lg text-xs text-[#FFFFFF]">
               <span className="text-[10px] font-mono text-[#A1A1AA] uppercase mr-1">Status:</span>
@@ -548,10 +615,7 @@ const Trips = () => {
 
             {(searchQuery || statusFilter !== 'All') && (
               <button
-                onClick={() => {
-                  setSearchQuery('');
-                  setStatusFilter('All');
-                }}
+                onClick={() => { setSearchQuery(''); setStatusFilter('All'); }}
                 className="px-3 py-2 border border-[#27272A] hover:bg-[#27272A]/30 text-[#A1A1AA] hover:text-[#FFFFFF] rounded-lg text-xs transition-colors cursor-pointer flex items-center gap-1.5"
               >
                 <X className="w-3.5 h-3.5" />
@@ -561,7 +625,6 @@ const Trips = () => {
           </div>
         </div>
 
-        {/* List Table Loader */}
         {loading ? (
           <div className="h-64 flex flex-col items-center justify-center gap-3">
             <motion.div
@@ -577,12 +640,16 @@ const Trips = () => {
               <Calendar className="w-8 h-8 text-[#A1A1AA]/50" />
             </div>
             <div className="max-w-xs">
-              <h4 className="text-sm font-semibold text-[#FFFFFF]">No Trips Dispatched</h4>
+              <h4 className="text-sm font-semibold text-[#FFFFFF]">
+                {isDriver ? 'No Trips Assigned' : 'No Trips Dispatched'}
+              </h4>
               <p className="text-xs text-[#A1A1AA] mt-1.5">
-                No active trip dispatches match your search filters. Dispatch a vehicle to track on-road operations.
+                {isDriver
+                  ? 'You have no trips assigned yet, or none match your current filters.'
+                  : 'No active trip dispatches match your search filters. Dispatch a vehicle to track on-road operations.'}
               </p>
             </div>
-            {routes.length > 0 && schedules.length > 0 && jeepneys.length > 0 && (
+            {!isDriver && routes.length > 0 && schedules.length > 0 && jeepneys.length > 0 && (
               <button
                 onClick={openAddModal}
                 className="px-3 py-1.5 bg-[#F97316]/10 border border-[#F97316]/20 hover:bg-[#F97316]/20 text-[#F97316] text-xs font-semibold rounded-lg transition-colors cursor-pointer"
@@ -599,13 +666,14 @@ const Trips = () => {
             sortBy={sortBy}
             sortOrder={sortOrder}
             onSort={handleSort}
+            isDriver={isDriver}
+            onStartTrip={handleStartTrip}
+            onMarkArrived={handleMarkArrived}
+            onConfirmArrival={handleConfirmArrival}
           />
         )}
       </div>
 
-      {/* --- MODALS DIALOGS --- */}
-
-      {/* Add Trip Form Modal */}
       <FormModal
         isOpen={isAddOpen}
         onClose={() => setIsAddOpen(false)}
@@ -620,7 +688,6 @@ const Trips = () => {
             </div>
           )}
 
-          {/* Jeepney Selector */}
           <div className="space-y-1.5">
             <label className="text-xs font-mono text-[#A1A1AA] uppercase block">Assign Fleet Jeepney</label>
             <select
@@ -646,7 +713,28 @@ const Trips = () => {
             )}
           </div>
 
-          {/* Route Selector */}
+          <div className="space-y-1.5">
+            <label className="text-xs font-mono text-[#A1A1AA] uppercase block">Assign Driver</label>
+            <select
+              name="driver"
+              value={formData.driver}
+              onChange={handleInputChange}
+              className="w-full px-3.5 py-2.5 text-xs bg-[#09090B] border border-[#27272A] rounded-lg text-[#FFFFFF] outline-none focus:border-[#F97316]/50 transition-all cursor-pointer"
+            >
+              <option value="">Unassigned</option>
+              {drivers.map((drv) => (
+                <option key={drv._id} value={drv._id}>
+                  {drv.fullName} (@{drv.username}){drv.hasOngoingTrip ? ' — ⚠ Has Ongoing Trip' : ''}
+                </option>
+              ))}
+            </select>
+            {drivers.length === 0 ? (
+              <span className="text-[9px] font-mono text-amber-400 block mt-1">No active Driver accounts registered. This trip will remain unassigned.</span>
+            ) : (
+              <span className="text-[9px] font-mono text-[#A1A1AA] block mt-1">Drivers marked "Has Ongoing Trip" are still on an active run — assign with caution.</span>
+            )}
+          </div>
+
           <div className="space-y-1.5">
             <label className="text-xs font-mono text-[#A1A1AA] uppercase block">Transit Corridor Route</label>
             <select
@@ -672,7 +760,6 @@ const Trips = () => {
             )}
           </div>
 
-          {/* Schedule slot (Filtered dynamically based on route) */}
           <div className="space-y-1.5">
             <label className="text-xs font-mono text-[#A1A1AA] uppercase block">Departure Schedule Slot</label>
             <select
@@ -705,7 +792,6 @@ const Trips = () => {
             )}
           </div>
 
-          {/* Date of Operation */}
           <div className="space-y-1.5">
             <label className="text-xs font-mono text-[#A1A1AA] uppercase block">Departure Date</label>
             <input
@@ -725,7 +811,6 @@ const Trips = () => {
             )}
           </div>
 
-          {/* Passenger Count */}
           <div className="space-y-1.5">
             <label className="text-xs font-mono text-[#A1A1AA] uppercase block">Current Passenger Count</label>
             <input
@@ -748,7 +833,6 @@ const Trips = () => {
             )}
           </div>
 
-          {/* Actual times logs */}
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <label className="text-[10px] font-mono text-[#A1A1AA] uppercase block">Actual Departure Time</label>
@@ -789,7 +873,6 @@ const Trips = () => {
             </div>
           </div>
 
-          {/* Status Select */}
           <div className="space-y-1.5">
             <label className="text-xs font-mono text-[#A1A1AA] uppercase block">Operational Dispatch Status</label>
             <select
@@ -805,7 +888,6 @@ const Trips = () => {
             </select>
           </div>
 
-          {/* Actions */}
           <div className="flex gap-3 pt-4 border-t border-[#27272A]">
             <button
               type="button"
@@ -819,17 +901,12 @@ const Trips = () => {
               disabled={submitLoading}
               className="flex-1 py-2.5 bg-[#F97316] hover:bg-[#EA580C] text-xs font-semibold text-[#FFFFFF] rounded-lg shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
             >
-              {submitLoading ? (
-                <RefreshCw className="w-4 h-4 animate-spin" />
-              ) : (
-                <span>Dispatch Trip</span>
-              )}
+              {submitLoading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <span>Dispatch Trip</span>}
             </button>
           </div>
         </form>
       </FormModal>
 
-      {/* Edit Trip Form Modal */}
       <FormModal
         isOpen={isEditOpen}
         onClose={() => setIsEditOpen(false)}
@@ -844,7 +921,6 @@ const Trips = () => {
             </div>
           )}
 
-          {/* Jeepney Selector */}
           <div className="space-y-1.5">
             <label className="text-xs font-mono text-[#A1A1AA] uppercase block">Assign Fleet Jeepney</label>
             <select
@@ -870,7 +946,26 @@ const Trips = () => {
             )}
           </div>
 
-          {/* Route Selector */}
+          <div className="space-y-1.5">
+            <label className="text-xs font-mono text-[#A1A1AA] uppercase block">Assign Driver</label>
+            <select
+              name="driver"
+              value={formData.driver}
+              onChange={handleInputChange}
+              className="w-full px-3.5 py-2.5 text-xs bg-[#09090B] border border-[#27272A] rounded-lg text-[#FFFFFF] outline-none focus:border-[#F97316]/50 transition-all cursor-pointer"
+            >
+              <option value="">Unassigned</option>
+              {drivers.map((drv) => (
+                <option key={drv._id} value={drv._id}>
+                  {drv.fullName} (@{drv.username}){drv.hasOngoingTrip ? ' — ⚠ Has Ongoing Trip' : ''}
+                </option>
+              ))}
+            </select>
+            {drivers.length === 0 && (
+              <span className="text-[9px] font-mono text-amber-400 block mt-1">No active Driver accounts registered. This trip will remain unassigned.</span>
+            )}
+          </div>
+
           <div className="space-y-1.5">
             <label className="text-xs font-mono text-[#A1A1AA] uppercase block">Transit Corridor Route</label>
             <select
@@ -896,7 +991,6 @@ const Trips = () => {
             )}
           </div>
 
-          {/* Schedule slot */}
           <div className="space-y-1.5">
             <label className="text-xs font-mono text-[#A1A1AA] uppercase block">Departure Schedule Slot</label>
             <select
@@ -923,7 +1017,6 @@ const Trips = () => {
             )}
           </div>
 
-          {/* Date of Operation */}
           <div className="space-y-1.5">
             <label className="text-xs font-mono text-[#A1A1AA] uppercase block">Departure Date</label>
             <input
@@ -943,7 +1036,6 @@ const Trips = () => {
             )}
           </div>
 
-          {/* Passenger Count */}
           <div className="space-y-1.5">
             <label className="text-xs font-mono text-[#A1A1AA] uppercase block">Current Passenger Count</label>
             <input
@@ -964,7 +1056,6 @@ const Trips = () => {
             )}
           </div>
 
-          {/* Actual times logs */}
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <label className="text-[10px] font-mono text-[#A1A1AA] uppercase block">Actual Departure Time</label>
@@ -1005,7 +1096,6 @@ const Trips = () => {
             </div>
           </div>
 
-          {/* Status Select */}
           <div className="space-y-1.5">
             <label className="text-xs font-mono text-[#A1A1AA] uppercase block">Operational Dispatch Status</label>
             <select
@@ -1021,7 +1111,6 @@ const Trips = () => {
             </select>
           </div>
 
-          {/* Actions */}
           <div className="flex gap-3 pt-4 border-t border-[#27272A]">
             <button
               type="button"
@@ -1035,17 +1124,12 @@ const Trips = () => {
               disabled={submitLoading}
               className="flex-1 py-2.5 bg-[#F97316] hover:bg-[#EA580C] text-xs font-semibold text-[#FFFFFF] rounded-lg shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
             >
-              {submitLoading ? (
-                <RefreshCw className="w-4 h-4 animate-spin" />
-              ) : (
-                <span>Update Trip</span>
-              )}
+              {submitLoading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <span>Update Trip</span>}
             </button>
           </div>
         </form>
       </FormModal>
 
-      {/* Delete Confirmation Modal */}
       <ConfirmationModal
         isOpen={isDeleteOpen}
         onClose={() => setIsDeleteOpen(false)}

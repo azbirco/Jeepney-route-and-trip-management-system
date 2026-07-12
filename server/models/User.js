@@ -50,14 +50,16 @@ const userSchema = new mongoose.Schema({
     enum:[
 
       'Admin',
-
-      'Terminal Personnel'
+      'Terminal Personnel',
+      'Driver'
 
     ],
 
     default:'Terminal Personnel'
 
   },
+
+  
 
   fullName:{
 
@@ -117,7 +119,7 @@ userSchema.pre(
 
 'save',
 
-async function(next){
+async function(){
 
 if(
 
@@ -129,7 +131,7 @@ if(
 
 ){
 
-return next();
+return;
 
 }
 
@@ -146,8 +148,6 @@ this.password,
 salt
 
 );
-
-next();
 
 }
 

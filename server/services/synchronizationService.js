@@ -111,102 +111,122 @@ export const sendTransactionRecords = async (
 ) => {
 
 
-  const trips =
-    await Trip.find({
-
-      status:{
-        $in:[
-          'Completed',
-          'Cancelled'
-        ]
-      }
-
-    })
-
-    .sort({
-      createdAt:-1
-    })
-
-    .limit(50);
+  try {
 
 
+    const trips =
+      await Trip.find({
 
+        status:{
+          $in:[
+            'Arrived',
+            'Cancelled'
+          ]
+        }
 
-  const stats =
-    await PassengerStatistic.find({})
+      })
 
-    .sort({
-      createdAt:-1
-    })
+      .sort({
+        createdAt:-1
+      })
 
-    .limit(50);
+      .limit(50);
 
 
 
 
-  const totalRecords =
-    trips.length + stats.length;
+    const stats =
+      await PassengerStatistic.find({})
+
+      .sort({
+        createdAt:-1
+      })
+
+      .limit(50);
 
 
 
-  if(totalRecords === 0){
 
-    return {
+    const totalRecords =
+      trips.length + stats.length;
 
-      synced:false,
 
-      message:
-      'No new terminal transactions found to synchronize.'
+
+    if(totalRecords === 0){
+
+      return {
+
+        synced:false,
+
+        message:
+        'No new terminal transactions found to synchronize.'
+
+      };
+
+    }
+
+
+
+
+    const payload = {
+
+      syncType:'Transaction Records',
+
+      tripsTransmitted:
+        trips.map(
+          trip=>trip.tripCode
+        ),
+
+      statisticsTransmittedCount:
+        stats.length,
+
+      timestamp:new Date()
 
     };
 
-  }
+
+
+
+    const syncLog =
+      await SynchronizationLog.create({
+
+        syncStatus:'Success',
+
+        recordsTransmitted:
+          totalRecords,
+
+
+        payload,
+
+
+        apiResponse:{
+
+          status:201,
+
+          message:
+          'Transaction records successfully replicated on central cloud database.',
+
+          insertedRecords:
+          totalRecords
+
+        }
+
+      });
 
 
 
 
-  const payload = {
 
-    syncType:'Transaction Records',
+    await ActivityLog.create({
 
-    tripsTransmitted:
-      trips.map(
-        trip=>trip.tripCode
-      ),
+      user:userId,
 
-    statisticsTransmittedCount:
-      stats.length,
+      action:'Synchronization Success',
 
-    timestamp:new Date()
+      details:
+      `Synced ${totalRecords} operational transactions to cloud server. Sync Session: ${syncLog.syncId}`,
 
-  };
-
-
-
-
-  const syncLog =
-    await SynchronizationLog.create({
-
-      syncStatus:'Success',
-
-      recordsTransmitted:
-        totalRecords,
-
-
-      payload,
-
-
-      apiResponse:{
-
-        status:201,
-
-        message:
-        'Transaction records successfully replicated on central cloud database.',
-
-        insertedRecords:
-        totalRecords
-
-      }
+      ipAddress
 
     });
 
@@ -214,30 +234,77 @@ export const sendTransactionRecords = async (
 
 
 
-  await ActivityLog.create({
+    return {
 
-    user:userId,
+      synced:true,
 
-    action:'Synchronization Success',
+      data:syncLog
 
-    details:
-    `Synced ${totalRecords} operational transactions to cloud server. Sync Session: ${syncLog.syncId}`,
-
-    ipAddress
-
-  });
+    };
 
 
+  }
+
+  catch(error){
+
+
+    // Log the failure instead of throwing,
+    // so callers (like auto-sync on trip update)
+    // can decide whether to surface it or not.
+
+    const failedLog =
+      await SynchronizationLog.create({
+
+        syncStatus:'Failed',
+
+        recordsTransmitted:0,
+
+        errorMessage:
+          error.message,
+
+        apiResponse:{
+
+          status:500,
+
+          message:
+          'Failed to synchronize transaction records with central server.'
+
+        }
+
+      });
 
 
 
-  return {
+    await ActivityLog.create({
 
-    synced:true,
+      user:userId,
 
-    data:syncLog
+      action:'Synchronization Failed',
 
-  };
+      details:
+      `Auto-sync failed. Sync Session: ${failedLog.syncId}. Reason: ${error.message}`,
+
+      ipAddress
+
+    });
+
+
+
+    return {
+
+      synced:false,
+
+      failed:true,
+
+      message:error.message,
+
+      data:failedLog
+
+    };
+
+
+  }
+
 
 };
 

@@ -70,37 +70,20 @@ synchronizationLogSchema.index({
 
 
 synchronizationLogSchema.pre(
-
   'save',
-
   async function (next) {
 
     if (!this.isNew) {
-
       return next();
-
     }
 
     if (!this.syncId) {
-
-      const count =
-
-        await this.constructor.countDocuments();
-
-      this.syncId =
-
-        `SYNC-${String(
-
-          count + 1
-
-        ).padStart(5, '0')}`;
-
+      const count = await this.constructor.countDocuments();
+      this.syncId = `SYNC-${String(count + 1).padStart(5, '0')}`;
     }
 
     next();
-
   }
-
 );
 
 

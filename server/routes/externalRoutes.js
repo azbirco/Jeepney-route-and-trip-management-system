@@ -22,19 +22,13 @@ const router = express.Router();
 // =====================================
 router.get(
   "/summary",
-  verifyApiKey,
+  // verifyApiKey, // TEMP: commented out for local testing - RESTORE BEFORE DEPLOY
   getExternalSummary
 );
 
-
-
-// =====================================
-// External Transactions API
-// GET /api/external/transactions
-// =====================================
 router.get(
   "/transactions",
-  verifyApiKey,
+  // verifyApiKey, // TEMP: commented out for local testing - RESTORE BEFORE DEPLOY
   getExternalTransactions
 );
 

@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import api from '../services/api';
+import useAuth from '../hooks/useAuth';
 
 import {
   Bus,
@@ -16,6 +17,10 @@ import { motion } from 'framer-motion';
 
 
 const Dashboard = () => {
+
+  const { user } = useAuth();
+
+  const isAdmin = user?.role?.toLowerCase() === 'admin';
 
   const [dashboard, setDashboard] = useState(null);
 
@@ -250,7 +255,7 @@ const Dashboard = () => {
 
 
 
-      <div className="grid gap-5 lg:grid-cols-3">
+      <div className={`grid gap-5 ${isAdmin ? 'lg:grid-cols-3' : 'lg:grid-cols-2'}`}>
 
 
 
@@ -297,20 +302,14 @@ const Dashboard = () => {
 
 
             <StatusItem
-              label="Boarding"
-              value={dashboard.tripStatus.boarding}
+              label="Departed"
+              value={dashboard.tripStatus.departed}
             />
 
 
             <StatusItem
-              label="In Transit"
-              value={dashboard.tripStatus.inTransit}
-            />
-
-
-            <StatusItem
-              label="Completed"
-              value={dashboard.tripStatus.completed}
+              label="Arrived"
+              value={dashboard.tripStatus.arrived}
             />
 
 
@@ -418,105 +417,109 @@ const Dashboard = () => {
 
 
 
-        {/* SYNCHRONIZATION */}
+        {/* SYNCHRONIZATION - ADMIN ONLY */}
 
-        <motion.div
+        {isAdmin && dashboard.synchronization && (
 
-          initial={{opacity:0,y:20}}
+          <motion.div
 
-          animate={{opacity:1,y:0}}
+            initial={{opacity:0,y:20}}
 
-          className="
-            bg-zinc-900
-            border
-            border-zinc-800
-            rounded-2xl
-            p-6
-          "
+            animate={{opacity:1,y:0}}
 
-        >
+            className="
+              bg-zinc-900
+              border
+              border-zinc-800
+              rounded-2xl
+              p-6
+            "
 
-
-          <div className="flex items-center gap-3 mb-6">
-
-            <RefreshCw className="text-orange-500"/>
-
-            <h2 className="text-lg font-semibold">
-
-              Synchronization
-
-            </h2>
-
-          </div>
+          >
 
 
+            <div className="flex items-center gap-3 mb-6">
 
-          <div className="space-y-4">
+              <RefreshCw className="text-orange-500"/>
 
+              <h2 className="text-lg font-semibold">
 
-            <p>
+                Synchronization
 
-              Status:
+              </h2>
 
-              <span className="ml-2 text-orange-400">
-
-                {dashboard.synchronization.status}
-
-              </span>
-
-            </p>
+            </div>
 
 
 
-            <p>
-
-              Records:
-
-              <span className="ml-2">
-
-                {dashboard.synchronization.records}
-
-              </span>
-
-            </p>
+            <div className="space-y-4">
 
 
+              <p>
 
-            <p className="text-sm text-zinc-500">
+                Status:
 
-              Last Sync
+                <span className="ml-2 text-orange-400">
 
-            </p>
+                  {dashboard.synchronization.status}
+
+                </span>
+
+              </p>
 
 
-            <p>
 
-              {
+              <p>
 
-                dashboard.synchronization.lastSync
+                Records:
 
-                ?
+                <span className="ml-2">
 
-                new Date(
+                  {dashboard.synchronization.records}
+
+                </span>
+
+              </p>
+
+
+
+              <p className="text-sm text-zinc-500">
+
+                Last Sync
+
+              </p>
+
+
+              <p>
+
+                {
 
                   dashboard.synchronization.lastSync
 
-                ).toLocaleString()
+                  ?
 
-                :
+                  new Date(
 
-                'No synchronization'
+                    dashboard.synchronization.lastSync
 
-              }
+                  ).toLocaleString()
+
+                  :
+
+                  'No synchronization'
+
+                }
 
 
-            </p>
+              </p>
 
 
-          </div>
+            </div>
 
 
-        </motion.div>
+          </motion.div>
+
+        )}
 
 
       </div>

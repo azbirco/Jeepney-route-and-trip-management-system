@@ -31,7 +31,7 @@ export const getDashboardOverview = async (req, res) => {
     });
 
     const tripsToday = await Trip.countDocuments({
-      tripDate: {
+      departureDate: {
         $gte: startOfDay,
         $lte: endOfDay
       }
@@ -73,16 +73,12 @@ export const getDashboardOverview = async (req, res) => {
       status: "Scheduled"
     });
 
-    const boarding = await Trip.countDocuments({
-      status: "Boarding"
+    const departed = await Trip.countDocuments({
+      status: "Departed"
     });
 
-    const transit = await Trip.countDocuments({
-      status: "In Transit"
-    });
-
-    const completed = await Trip.countDocuments({
-      status: "Completed"
+    const arrived = await Trip.countDocuments({
+      status: "Arrived"
     });
 
     const cancelled = await Trip.countDocuments({
@@ -107,30 +103,10 @@ export const getDashboardOverview = async (req, res) => {
         : 0;
 
     // ============================================
-    // Synchronization
-    // ============================================
-
-    const latestSync = await SynchronizationLog.findOne()
-      .sort({
-        createdAt: -1
-      });
-
-    // ============================================
-    // Activity Feed
-    // ============================================
-
-    const activities = await ActivityLog.find()
-      .populate("user", "username fullName")
-      .sort({
-        createdAt: -1
-      })
-      .limit(5);
-
-    // ============================================
     // RESPONSE
     // ============================================
 
-    res.status(200).json({
+    const responseData = {
       success: true,
 
       metrics: {
@@ -148,9 +124,8 @@ export const getDashboardOverview = async (req, res) => {
 
       tripStatus: {
         scheduled,
-        boarding,
-        inTransit: transit,
-        completed,
+        departed,
+        arrived,
         cancelled
       },
 
@@ -161,14 +136,31 @@ export const getDashboardOverview = async (req, res) => {
         )
       },
 
-      synchronization: {
+      activities: await ActivityLog.find()
+        .populate("user", "username fullName")
+        .sort({
+          createdAt: -1
+        })
+        .limit(5)
+    };
+
+    // Synchronization data: Admin only
+    if (req.user?.role?.toLowerCase() === 'admin') {
+
+      const latestSync = await SynchronizationLog.findOne()
+        .sort({
+          createdAt: -1
+        });
+
+      responseData.synchronization = {
         lastSync: latestSync?.lastSync || null,
         status: latestSync?.syncStatus || "Pending",
         records: latestSync?.recordsTransmitted || 0
-      },
+      };
 
-      activities
-    });
+    }
+
+    res.status(200).json(responseData);
 
   } catch (error) {
 

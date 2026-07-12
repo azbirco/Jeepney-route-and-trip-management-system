@@ -14,6 +14,7 @@ import Reports from "./pages/Reports";
 import Synchronization from "./pages/Synchronization";
 import ActivityLogs from "./pages/ActivityLogs";
 import Profile from "./pages/Profile";
+import Users from './pages/Users';
 
 
 export default function App() {
@@ -63,6 +64,14 @@ export default function App() {
             element={<Trips />} 
           />
 
+          {/* Driver-facing alias — same Trips component, which
+              internally adapts its view based on the logged-in
+              user's role (see isDriver check in Trips.jsx) */}
+          <Route 
+            path="/my-trips" 
+            element={<Trips />} 
+          />
+
           <Route 
             path="/passengers" 
             element={<Passengers />} 
@@ -86,6 +95,11 @@ export default function App() {
           <Route 
             path="/profile" 
             element={<Profile />} 
+          />
+
+          <Route 
+            path="/users" 
+            element={<Users />} 
           />
 
         </Route>
