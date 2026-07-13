@@ -10,7 +10,9 @@ import {
   RefreshCw,
   Activity,
   PhilippinePeso,
-  Calendar
+  Calendar,
+  BellRing,
+  CheckCircle2
 } from 'lucide-react';
 
 import { motion } from 'framer-motion';
@@ -21,6 +23,7 @@ const Dashboard = () => {
   const { user } = useAuth();
 
   const isAdmin = user?.role?.toLowerCase() === 'admin';
+  const isDriver = user?.role === 'Driver';
 
   const [dashboard, setDashboard] = useState(null);
 
@@ -171,6 +174,126 @@ const Dashboard = () => {
 
 
 
+  // ============================================
+  // DRIVER VIEW — personal-only dashboard
+  // ============================================
+  if (isDriver) {
+
+    return (
+
+      <div className="space-y-6">
+
+        <div>
+          <h1 className="text-3xl font-bold text-white">
+            Dashboard
+          </h1>
+          <p className="text-zinc-400 mt-1">
+            Your Trip Overview
+          </p>
+        </div>
+
+        {dashboard.myMetrics.pendingConfirmations > 0 && (
+
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="
+              bg-amber-500/10
+              border border-amber-500/20
+              rounded-2xl
+              p-4
+              flex items-center gap-3
+              text-amber-400
+              text-sm
+            "
+          >
+
+            <BellRing className="w-5 h-5 shrink-0 animate-pulse"/>
+
+            <span>
+
+              {dashboard.myMetrics.pendingConfirmations} trip
+              {dashboard.myMetrics.pendingConfirmations > 1 ? 's' : ''}{' '}
+              awaiting Terminal Personnel confirmation.
+
+            </span>
+
+          </motion.div>
+
+        )}
+
+        <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
+
+          <Card
+            title="My Trips Today"
+            value={dashboard.myMetrics.myTripsToday}
+            icon={<Calendar size={22}/>}
+          />
+
+          <Card
+            title="My Passengers Today"
+            value={dashboard.myMetrics.myPassengersToday}
+            icon={<Users size={22}/>}
+          />
+
+          <Card
+            title="Total Assigned Trips"
+            value={dashboard.myMetrics.totalAssignedTrips}
+            icon={<Compass size={22}/>}
+          />
+
+          <Card
+            title="Completed Trips"
+            value={dashboard.myTripStatus.arrived}
+            icon={<CheckCircle2 size={22}/>}
+          />
+
+        </div>
+
+        <motion.div
+          initial={{opacity:0,y:20}}
+          animate={{opacity:1,y:0}}
+          className="
+            bg-zinc-900
+            border
+            border-zinc-800
+            rounded-2xl
+            p-6
+          "
+        >
+
+          <div className="flex items-center gap-3 mb-6">
+
+            <Compass className="text-orange-500"/>
+
+            <h2 className="text-lg font-semibold">
+              My Trip Status
+            </h2>
+
+          </div>
+
+          <div className="space-y-4">
+
+            <StatusItem label="Scheduled" value={dashboard.myTripStatus.scheduled}/>
+            <StatusItem label="Departed" value={dashboard.myTripStatus.departed}/>
+            <StatusItem label="Arrived" value={dashboard.myTripStatus.arrived}/>
+            <StatusItem label="Cancelled" value={dashboard.myTripStatus.cancelled}/>
+
+          </div>
+
+        </motion.div>
+
+      </div>
+
+    );
+
+  }
+
+
+
+  // ============================================
+  // ADMIN & TERMINAL PERSONNEL — fleet-wide operational dashboard
+  // ============================================
 
   return (
 
@@ -193,6 +316,37 @@ const Dashboard = () => {
         </p>
 
       </div>
+
+
+      {dashboard.pendingArrivalsCount > 0 && (
+
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="
+            bg-amber-500/10
+            border border-amber-500/20
+            rounded-2xl
+            p-4
+            flex items-center gap-3
+            text-amber-400
+            text-sm
+          "
+        >
+
+          <BellRing className="w-5 h-5 shrink-0 animate-pulse"/>
+
+          <span>
+
+            {dashboard.pendingArrivalsCount} trip
+            {dashboard.pendingArrivalsCount > 1 ? 's' : ''} reported as
+            arrived and awaiting your confirmation.
+
+          </span>
+
+        </motion.div>
+
+      )}
 
 
 
@@ -528,90 +682,94 @@ const Dashboard = () => {
 
 
 
-      {/* ACTIVITY */}
+      {/* ACTIVITY — ADMIN ONLY */}
 
-      <motion.div
+      {isAdmin && dashboard.activities && (
 
-        initial={{opacity:0,y:20}}
+        <motion.div
 
-        animate={{opacity:1,y:0}}
+          initial={{opacity:0,y:20}}
 
-        className="
-          bg-zinc-900
-          border
-          border-zinc-800
-          rounded-2xl
-          p-6
-        "
+          animate={{opacity:1,y:0}}
 
-      >
+          className="
+            bg-zinc-900
+            border
+            border-zinc-800
+            rounded-2xl
+            p-6
+          "
 
-
-        <div className="flex items-center gap-3 mb-5">
-
-
-          <Activity className="text-orange-500"/>
+        >
 
 
-          <h2 className="text-lg font-semibold">
-
-            Recent Activities
-
-          </h2>
+          <div className="flex items-center gap-3 mb-5">
 
 
-        </div>
+            <Activity className="text-orange-500"/>
+
+
+            <h2 className="text-lg font-semibold">
+
+              Recent Activities
+
+            </h2>
+
+
+          </div>
 
 
 
-        <div className="space-y-4">
+          <div className="space-y-4">
 
 
-          {
+            {
 
-            dashboard.activities.map(activity => (
+              dashboard.activities.map(activity => (
 
-              <div
+                <div
 
-                key={activity._id}
+                  key={activity._id}
 
-                className="border-b border-zinc-800 pb-3"
+                  className="border-b border-zinc-800 pb-3"
 
-              >
+                >
 
-                <p className="text-sm">
+                  <p className="text-sm">
 
-                  {activity.details}
+                    {activity.details}
 
-                </p>
-
-
-                <span className="text-xs text-zinc-500">
-
-                  {
-
-                    new Date(
-
-                      activity.createdAt
-
-                    ).toLocaleString()
-
-                  }
-
-                </span>
+                  </p>
 
 
-              </div>
+                  <span className="text-xs text-zinc-500">
 
-            ))
+                    {
 
-          }
+                      new Date(
+
+                        activity.createdAt
+
+                      ).toLocaleString()
+
+                    }
+
+                  </span>
 
 
-        </div>
+                </div>
+
+              ))
+
+            }
 
 
-      </motion.div>
+          </div>
+
+
+        </motion.div>
+
+      )}
 
 
 

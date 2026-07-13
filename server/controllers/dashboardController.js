@@ -20,8 +20,61 @@ export const getDashboardOverview = async (req, res) => {
     const endOfDay = new Date(today);
     endOfDay.setHours(23, 59, 59, 999);
 
+    const role = req.user?.role;
+    const isAdmin = role === 'Admin';
+    const isDriver = role === 'Driver';
+
     // ============================================
-    // KPI
+    // DRIVER VIEW — personal-only. No fleet-wide data, no revenue,
+    // no audit activity log; a Driver only ever sees their own trips.
+    // ============================================
+    if (isDriver) {
+
+      const myTrips = await Trip.find({ driver: req.user._id });
+
+      const myTripsToday = myTrips.filter(t =>
+        t.departureDate >= startOfDay && t.departureDate <= endOfDay
+      ).length;
+
+      const myPassengersToday = myTrips
+        .filter(t => t.departureDate >= startOfDay && t.departureDate <= endOfDay)
+        .reduce((sum, t) => sum + (t.passengerCount || 0), 0);
+
+      const myScheduled = myTrips.filter(t => t.status === 'Scheduled').length;
+      const myDeparted = myTrips.filter(t => t.status === 'Departed').length;
+      const myArrived = myTrips.filter(t => t.status === 'Arrived').length;
+      const myCancelled = myTrips.filter(t => t.status === 'Cancelled').length;
+
+      const pendingConfirmations = myTrips.filter(
+        t => t.arrivalReported && t.status !== 'Arrived'
+      ).length;
+
+      return res.status(200).json({
+
+        success: true,
+
+        role: 'Driver',
+
+        myMetrics: {
+          myTripsToday,
+          myPassengersToday,
+          totalAssignedTrips: myTrips.length,
+          pendingConfirmations
+        },
+
+        myTripStatus: {
+          scheduled: myScheduled,
+          departed: myDeparted,
+          arrived: myArrived,
+          cancelled: myCancelled
+        }
+
+      });
+
+    }
+
+    // ============================================
+    // KPI — fleet-wide, shared by Admin & Terminal Personnel
     // ============================================
 
     const totalJeepneys = await Jeepney.countDocuments();
@@ -102,12 +155,21 @@ export const getDashboardOverview = async (req, res) => {
           ) / passengerStats.length
         : 0;
 
+    // Trips reported as arrived by a Driver but not yet confirmed —
+    // relevant operational context for Terminal Personnel/Admin.
+    const pendingArrivalsCount = await Trip.countDocuments({
+      arrivalReported: true,
+      status: { $ne: 'Arrived' }
+    });
+
     // ============================================
     // RESPONSE
     // ============================================
 
     const responseData = {
       success: true,
+
+      role,
 
       metrics: {
         totalJeepneys,
@@ -136,16 +198,21 @@ export const getDashboardOverview = async (req, res) => {
         )
       },
 
-      activities: await ActivityLog.find()
+      pendingArrivalsCount
+    };
+
+    // Recent Activities & Synchronization — Admin only. This is a
+    // system-wide audit trail (account creation, login/logout events for
+    // every user) which isn't appropriate for Terminal Personnel to see,
+    // even though they share the rest of the operational dashboard.
+    if (isAdmin) {
+
+      responseData.activities = await ActivityLog.find()
         .populate("user", "username fullName")
         .sort({
           createdAt: -1
         })
-        .limit(5)
-    };
-
-    // Synchronization data: Admin only
-    if (req.user?.role?.toLowerCase() === 'admin') {
+        .limit(5);
 
       const latestSync = await SynchronizationLog.findOne()
         .sort({

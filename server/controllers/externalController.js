@@ -217,6 +217,11 @@ export const getExternalTransactions = async (req,res)=>{
         "plateNumber jeepneyCode"
       )
 
+      .populate(
+        "driver",
+        "username fullName"
+      )
+
       .sort({
         createdAt:-1
       })
@@ -265,6 +270,20 @@ export const getExternalTransactions = async (req,res)=>{
         ?
 
         trip.jeepney.plateNumber
+
+        :
+
+        null,
+
+
+
+      driver:
+
+        trip.driver
+
+        ?
+
+        trip.driver.fullName
 
         :
 
