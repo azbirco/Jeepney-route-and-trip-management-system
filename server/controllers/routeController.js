@@ -1,5 +1,6 @@
 import Route from '../models/Route.js';
 import ActivityLog from '../models/ActivityLog.js';
+import { notifyAdmin } from '../services/notifyService.js';
 
 
 // CREATE ROUTE
@@ -57,6 +58,10 @@ export const createRoute = async (req, res) => {
       );
 
     }
+
+
+    // Changes totalRoutes on the central admin dashboard.
+    notifyAdmin();
 
 
     res.status(201).json({
@@ -358,6 +363,10 @@ export const updateRoute = async(req,res)=>{
     }
 
 
+    // Not notifying here — a route edit (fare, travel time, status)
+    // doesn't change totalRoutes or anything currently reflected in
+    // the external summary/transactions payload.
+
 
     res.status(200).json({
 
@@ -479,6 +488,9 @@ export const deleteRoute = async(req,res)=>{
 
     }
 
+
+    // Changes totalRoutes on the central admin dashboard.
+    notifyAdmin();
 
 
     res.status(200).json({

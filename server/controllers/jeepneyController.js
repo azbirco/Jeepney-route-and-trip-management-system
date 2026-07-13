@@ -1,5 +1,6 @@
 import Jeepney from '../models/Jeepney.js';
 import ActivityLog from '../models/ActivityLog.js';
+import { notifyAdmin } from '../services/notifyService.js';
 
 
 // CREATE JEEPNEY
@@ -40,6 +41,11 @@ export const createJeepney = async (req, res) => {
       ipAddress: req.ip
 
     });
+
+
+
+    // Changes totalJeepneys on the central admin dashboard.
+    notifyAdmin();
 
 
 
@@ -305,6 +311,11 @@ export const updateJeepney = async(req,res)=>{
 
 
 
+    // Not notifying here — a jeepney edit (plate, capacity, status)
+    // doesn't change totalJeepneys or anything else reflected in the
+    // external summary/transactions payload.
+
+
     res.status(200).json({
 
       success:true,
@@ -398,6 +409,11 @@ export const deleteJeepney = async(req,res)=>{
       ipAddress:req.ip
 
     });
+
+
+
+    // Changes totalJeepneys on the central admin dashboard.
+    notifyAdmin();
 
 
 

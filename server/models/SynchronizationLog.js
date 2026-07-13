@@ -71,10 +71,10 @@ synchronizationLogSchema.index({
 
 synchronizationLogSchema.pre(
   'save',
-  async function (next) {
+  async function () {
 
     if (!this.isNew) {
-      return next();
+      return;
     }
 
     if (!this.syncId) {
@@ -82,7 +82,6 @@ synchronizationLogSchema.pre(
       this.syncId = `SYNC-${String(count + 1).padStart(5, '0')}`;
     }
 
-    next();
   }
 );
 

@@ -6,6 +6,7 @@ import ActivityLog from '../models/ActivityLog.js';
 import PassengerStatistic from '../models/PassengerStatistic.js';
 import passengerStatisticService from '../services/passengerStatisticService.js';
 import synchronizationService from '../services/synchronizationService.js';
+import { notifyAdmin } from '../services/notifyService.js';
 
 
 // Create Trip
@@ -54,6 +55,10 @@ export const createTrip = async (req, res) => {
       details: `Created trip ${populatedTrip.tripCode}`,
       ipAddress: req.ip
     });
+
+    // A new trip = a new transaction record + changed totals on the
+    // central admin dashboard.
+    notifyAdmin();
 
     res.status(201).json({
       success: true,
@@ -201,6 +206,19 @@ export const updateTrip = async (req, res) => {
 
     await passengerStatisticService.createPassengerStatistic(trip._id, trip.passengerCount || 0);
 
+    // Jeepney status sync — covers manual overrides made here (full edit)
+    // rather than through the Driver's status-report flow or the
+    // Terminal Personnel arrival-confirmation flow.
+    const wasDeparted = existingTrip.status === 'Departed';
+    const nowFinished = trip.status === 'Arrived' || trip.status === 'Cancelled';
+    const nowDeparted = !wasDeparted && trip.status === 'Departed';
+
+    if (wasDeparted && nowFinished && trip.jeepney) {
+      await Jeepney.findByIdAndUpdate(trip.jeepney._id, { status: 'Available' });
+    } else if (nowDeparted && trip.jeepney) {
+      await Jeepney.findByIdAndUpdate(trip.jeepney._id, { status: 'In Transit' });
+    }
+
     await ActivityLog.create({
       user: req.user?._id,
       action: 'Update Trip',
@@ -213,6 +231,10 @@ export const updateTrip = async (req, res) => {
         .sendTransactionRecords(req.user?._id, req.ip)
         .catch(err => console.error('Auto-sync failed silently:', err.message));
     }
+
+    // A full edit can change status, revenue, passenger count, or the
+    // fields shown in the central admin's transactions table.
+    notifyAdmin();
 
     res.status(200).json({
       success: true,
@@ -259,6 +281,8 @@ export const updateTripStatus = async (req, res) => {
       });
     }
 
+    let statusActuallyChanged = false;
+
     if (status === 'Departed') {
       if (trip.status !== 'Scheduled') {
         return res.status(400).json({
@@ -268,6 +292,7 @@ export const updateTripStatus = async (req, res) => {
       }
       trip.status = 'Departed';
       if (actualDepartureTime) trip.actualDepartureTime = actualDepartureTime;
+      statusActuallyChanged = true;
     }
 
     if (status === 'Arrived') {
@@ -290,6 +315,13 @@ export const updateTripStatus = async (req, res) => {
 
     await trip.save();
 
+    // Jeepney goes "In Transit" the moment the driver actually departs.
+    // (Arrival report does NOT free up the jeepney yet — it's still
+    // physically en route until Terminal Personnel confirms arrival.)
+    if (status === 'Departed') {
+      await Jeepney.findByIdAndUpdate(trip.jeepney._id, { status: 'In Transit' });
+    }
+
     await passengerStatisticService.createPassengerStatistic(trip._id, trip.passengerCount || 0);
 
     await ActivityLog.create({
@@ -301,6 +333,14 @@ export const updateTripStatus = async (req, res) => {
           : `Driver marked trip ${trip.tripCode} as ${status}`,
       ipAddress: req.ip
     });
+
+    // Only "Departed" actually changes trip.status (and therefore the
+    // tripsByStatus counts on the admin dashboard). The "Arrived" report
+    // here is still pending confirmation, so no notify yet — confirmArrival
+    // is where that status change actually becomes final.
+    if (statusActuallyChanged) {
+      notifyAdmin();
+    }
 
     res.status(200).json({
       success: true,
@@ -351,6 +391,9 @@ export const confirmArrival = async (req, res) => {
 
     await trip.save();
 
+    // Trip is officially done — free up the jeepney for the next dispatch.
+    await Jeepney.findByIdAndUpdate(trip.jeepney._id, { status: 'Available' });
+
     await passengerStatisticService.createPassengerStatistic(trip._id, trip.passengerCount || 0);
 
     await ActivityLog.create({
@@ -363,6 +406,11 @@ export const confirmArrival = async (req, res) => {
     synchronizationService
       .sendTransactionRecords(req.user?._id, req.ip)
       .catch(err => console.error('Auto-sync failed silently:', err.message));
+
+    // This is where status officially flips to "Arrived" and revenue
+    // becomes counted in the external summary — the most important
+    // trigger point for the admin dashboard refresh.
+    notifyAdmin();
 
     res.status(200).json({
       success: true,
@@ -460,6 +508,10 @@ export const deleteTrip = async (req, res) => {
       details: `Deleted trip ${trip.tripCode}`,
       ipAddress: req.ip
     });
+
+    // A deleted trip disappears from the admin's transactions table and
+    // shifts the totals — worth a notify.
+    notifyAdmin();
 
     res.status(200).json({ success: true, message: 'Trip deleted successfully' });
   } catch (error) {

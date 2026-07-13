@@ -18,9 +18,17 @@ import {
 import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
 
+// Default seating capacity suggested per type. Real-world plate-to-plate
+// capacity still varies by owner modification, so this only pre-fills the
+// field — Terminal Personnel can always override it before saving.
+const getDefaultCapacity = (type) => (type === 'E-Jeep' ? 23 : 18);
+
 const Jeepneys = () => {
   const { user } = useAuth();
-  const isAdmin = user?.role === 'Admin';
+  // Only Terminal Personnel manage the fleet registry. Admin gets a
+  // read-only oversight view (central dashboard), and Driver has no
+  // business creating/editing/deleting units — they only drive them.
+  const canManageJeepneys = user?.role === 'Terminal Personnel';
 
   // State variables
   const [jeepneys, setJeepneys] = useState([]);
@@ -46,7 +54,7 @@ const Jeepneys = () => {
   const [formData, setFormData] = useState({
     plateNumber: '',
     type: 'Traditional Jeepney',
-    capacity: 18,
+    capacity: getDefaultCapacity('Traditional Jeepney'),
     status: 'Available'
   });
   const [formErrors, setFormErrors] = useState({});
@@ -124,6 +132,19 @@ const Jeepneys = () => {
     // Clear validation error when typing
     if (formErrors[name]) {
       setFormErrors((prev) => ({ ...prev, [name]: null }));
+    }
+  };
+
+  // Type selection handler — switches type AND pre-fills the suggested
+  // capacity for that type. Still fully editable afterward.
+  const handleTypeChange = (type) => {
+    setFormData((prev) => ({
+      ...prev,
+      type,
+      capacity: getDefaultCapacity(type)
+    }));
+    if (formErrors.capacity) {
+      setFormErrors((prev) => ({ ...prev, capacity: null }));
     }
   };
 
@@ -261,7 +282,7 @@ const Jeepneys = () => {
     setFormData({
       plateNumber: '',
       type: 'Traditional Jeepney',
-      capacity: 18,
+      capacity: getDefaultCapacity('Traditional Jeepney'),
       status: 'Available'
     });
     setFormErrors({});
@@ -331,7 +352,7 @@ const Jeepneys = () => {
             <p className="text-xs text-[#A1A1AA] font-mono mt-0.5">Plan Routes. Manage Trips. Monitor Operations.</p>
           </div>
         </div>
-        {!isAdmin && (
+        {canManageJeepneys && (
           <button
             onClick={() => {
               resetForm();
@@ -365,7 +386,7 @@ const Jeepneys = () => {
         {/* Total Jeepneys */}
         <div className="bg-[#18181B] border border-[#27272A] p-4 rounded-xl flex flex-col justify-between h-28 relative overflow-hidden backdrop-blur-md">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-mono text-[#A1A1AA] uppercase">Total Fleet Size</span>
+            <span className="text-xs font-mono text-[#A1A1AA] uppercase">Total Units</span>
             <div className="p-1 rounded bg-[#F97316]/5 border border-[#F97316]/10 text-[#F97316]">
               <Bus className="w-4 h-4" />
             </div>
@@ -379,7 +400,7 @@ const Jeepneys = () => {
         {/* Available Jeepneys */}
         <div className="bg-[#18181B] border border-[#27272A] p-4 rounded-xl flex flex-col justify-between h-28 relative overflow-hidden backdrop-blur-md">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-mono text-[#A1A1AA] uppercase">Available Fleet</span>
+            <span className="text-xs font-mono text-[#A1A1AA] uppercase">Available Units</span>
             <div className="p-1 rounded bg-emerald-500/5 border border-emerald-500/10 text-emerald-400">
               <CheckCircle2 className="w-4 h-4" />
             </div>
@@ -393,7 +414,7 @@ const Jeepneys = () => {
         {/* Active Jeepneys (In Transit) */}
         <div className="bg-[#18181B] border border-[#27272A] p-4 rounded-xl flex flex-col justify-between h-28 relative overflow-hidden backdrop-blur-md">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-mono text-[#A1A1AA] uppercase">In Transit Fleet</span>
+            <span className="text-xs font-mono text-[#A1A1AA] uppercase">In Transit Units</span>
             <div className="p-1 rounded bg-amber-500/5 border border-amber-500/10 text-amber-400">
               <Navigation className="w-4 h-4" />
             </div>
@@ -507,7 +528,7 @@ const Jeepneys = () => {
               transition={{ repeat: Infinity, duration: 1.5, ease: 'linear' }}
               className="w-8 h-8 border-2 border-[#F97316] border-t-transparent rounded-full"
             />
-            <span className="text-xs font-mono text-[#A1A1AA]">Retrieving PUJ Fleet Registry...</span>
+            <span className="text-xs font-mono text-[#A1A1AA]">Retrieving PUJ Unit Registry...</span>
           </div>
         ) : filteredJeepneys.length === 0 ? (
           /* Empty state */
@@ -518,18 +539,20 @@ const Jeepneys = () => {
             <div className="max-w-xs">
               <h4 className="text-sm font-semibold text-[#FFFFFF]">No Jeepney Units Found</h4>
               <p className="text-xs text-[#A1A1AA] mt-1.5">
-                No fleet vehicles match your specified filters or search queries. Add a new unit to begin.
+                No registered units match your specified filters or search queries. Add a new unit to begin.
               </p>
             </div>
-            <button
-              onClick={() => {
-                resetForm();
-                setIsAddOpen(true);
-              }}
-              className="px-3 py-1.5 bg-[#F97316]/10 border border-[#F97316]/20 hover:bg-[#F97316]/20 text-[#F97316] text-xs font-semibold rounded-lg transition-colors cursor-pointer"
-            >
-              Add New Unit
-            </button>
+            {canManageJeepneys && (
+              <button
+                onClick={() => {
+                  resetForm();
+                  setIsAddOpen(true);
+                }}
+                className="px-3 py-1.5 bg-[#F97316]/10 border border-[#F97316]/20 hover:bg-[#F97316]/20 text-[#F97316] text-xs font-semibold rounded-lg transition-colors cursor-pointer"
+              >
+                Add New Unit
+              </button>
+            )}
           </div>
         ) : (
           /* Results Table */
@@ -643,7 +666,7 @@ const Jeepneys = () => {
                         >
                           <Eye className="w-4 h-4" />
                         </button>
-                        {!isAdmin && (
+                        {canManageJeepneys && (
                           <>
                             <button
                               onClick={() => openEditModal(item)}
@@ -749,7 +772,7 @@ const Jeepneys = () => {
                   <div className="grid grid-cols-2 gap-3">
                     <button
                       type="button"
-                      onClick={() => setFormData({ ...formData, type: 'Traditional Jeepney' })}
+                      onClick={() => handleTypeChange('Traditional Jeepney')}
                       className={`py-2.5 px-3 rounded-lg text-xs font-semibold border transition-all cursor-pointer flex flex-col items-center gap-1.5 ${
                         formData.type === 'Traditional Jeepney'
                           ? 'bg-[#F97316]/10 border-[#F97316] text-[#F97316]'
@@ -760,7 +783,7 @@ const Jeepneys = () => {
                     </button>
                     <button
                       type="button"
-                      onClick={() => setFormData({ ...formData, type: 'E-Jeep' })}
+                      onClick={() => handleTypeChange('E-Jeep')}
                       className={`py-2.5 px-3 rounded-lg text-xs font-semibold border transition-all cursor-pointer flex flex-col items-center gap-1.5 ${
                         formData.type === 'E-Jeep'
                           ? 'bg-sky-500/10 border-sky-500 text-sky-400'
@@ -791,7 +814,7 @@ const Jeepneys = () => {
                       <span>{formErrors.capacity}</span>
                     </p>
                   ) : (
-                    <span className="text-[9px] font-mono text-[#A1A1AA] block mt-1">Maximum allowed boarding passenger limit</span>
+                    <span className="text-[9px] font-mono text-[#A1A1AA] block mt-1">Pre-filled per type — adjust if this unit differs</span>
                   )}
                 </div>
 
@@ -922,7 +945,7 @@ const Jeepneys = () => {
                   <div className="grid grid-cols-2 gap-3">
                     <button
                       type="button"
-                      onClick={() => setFormData({ ...formData, type: 'Traditional Jeepney' })}
+                      onClick={() => handleTypeChange('Traditional Jeepney')}
                       className={`py-2.5 px-3 rounded-lg text-xs font-semibold border transition-all cursor-pointer flex flex-col items-center gap-1.5 ${
                         formData.type === 'Traditional Jeepney'
                           ? 'bg-[#F97316]/10 border-[#F97316] text-[#F97316]'
@@ -933,7 +956,7 @@ const Jeepneys = () => {
                     </button>
                     <button
                       type="button"
-                      onClick={() => setFormData({ ...formData, type: 'E-Jeep' })}
+                      onClick={() => handleTypeChange('E-Jeep')}
                       className={`py-2.5 px-3 rounded-lg text-xs font-semibold border transition-all cursor-pointer flex flex-col items-center gap-1.5 ${
                         formData.type === 'E-Jeep'
                           ? 'bg-sky-500/10 border-sky-500 text-sky-400'
