@@ -2,7 +2,8 @@ import express from "express";
 
 import {
   getExternalSummary,
-  getExternalTransactions
+  getExternalTransactions,
+  getExternalRoutes
 } from "../controllers/externalController.js";
 
 
@@ -30,6 +31,12 @@ router.get(
   "/transactions",
   // verifyApiKey, // TEMP: commented out for local testing - RESTORE BEFORE DEPLOY
   getExternalTransactions
+);
+
+router.get(
+  "/transactions",
+  // verifyApiKey, // TEMP: commented out for local testing - RESTORE BEFORE DEPLOY
+  getExternalRoutes
 );
 
 

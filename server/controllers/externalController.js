@@ -362,3 +362,28 @@ export const getExternalTransactions = async (req,res)=>{
 
 
 };
+
+export const getExternalRoutes = async (req,res)=>{
+
+
+  try{
+    const routes = await Route.find()
+      .sort({
+        createdAt:-1
+      })
+      .lean();
+
+
+    res.json({
+      success:true,
+      data:routes
+    });
+  }
+  catch(error){
+    console.error(error);
+    res.status(500).json({
+      success:false,
+      message:"Failed to fetch routes"
+    });
+  }
+};
