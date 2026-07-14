@@ -34,7 +34,7 @@ router.get(
 );
 
 router.get(
-  "/transactions",
+  "/routes",
   // verifyApiKey, // TEMP: commented out for local testing - RESTORE BEFORE DEPLOY
   getExternalRoutes
 );
