@@ -8,7 +8,8 @@ import {
   AlertCircle,
   RefreshCw,
   X,
-  TrendingUp
+  TrendingUp,
+  Info
 } from 'lucide-react';
 import api from '../services/api';
 import RouteTable from '../layouts/tables/RouteTable';
@@ -17,6 +18,41 @@ import ConfirmationModal from '../layouts/common/ConfirmationModal';
 import { useAuth } from '../context/AuthContext';
 
 const MUNICIPALITIES = ['Solano', 'Bayombong', 'Bagabag', 'Bambang', 'Aritao', 'Sta. Fe'];
+
+// Reference data for typical distance / fare / travel time per route pair.
+// Sourced externally by Velle — shown on-demand via the "View Reference"
+// toggle, NOT auto-filled. Admin still types the actual values.
+const ROUTE_REFERENCE_DATA = [
+  { pair: ['Solano', 'Bayombong'], distance: '7.9 km', fareMin: 15, fareMax: 20, timeMin: 10, timeMax: 15 },
+  { pair: ['Solano', 'Bagabag'], distance: '20 km', fareMin: 40, fareMax: 50, timeMin: 25, timeMax: 35 },
+  { pair: ['Solano', 'Bambang'], distance: '23 km', fareMin: 45, fareMax: 55, timeMin: 30, timeMax: 40 },
+  { pair: ['Solano', 'Aritao'], distance: '38 km', fareMin: 75, fareMax: 85, timeMin: 50, timeMax: 60 },
+  { pair: ['Solano', 'Sta. Fe'], distance: '55.5 km', fareMin: 100, fareMax: 110, timeMin: 75, timeMax: 90 },
+  { pair: ['Bayombong', 'Bagabag'], distance: '26 km', fareMin: 50, fareMax: 60, timeMin: 35, timeMax: 45 },
+  { pair: ['Bayombong', 'Bambang'], distance: '15 km', fareMin: 30, fareMax: 38, timeMin: 20, timeMax: 25 },
+  { pair: ['Bayombong', 'Aritao'], distance: '30 km', fareMin: 60, fareMax: 70, timeMin: 45, timeMax: 55 },
+  { pair: ['Bayombong', 'Sta. Fe'], distance: '48 km', fareMin: 90, fareMax: 100, timeMin: 60, timeMax: 60 },
+  { pair: ['Bagabag', 'Bambang'], distance: '41 km', fareMin: 80, fareMax: 90, timeMin: 60, timeMax: 60 },
+  { pair: ['Bagabag', 'Aritao'], distance: '56 km', fareMin: 100, fareMax: 115, timeMin: 80, timeMax: 80 },
+  { pair: ['Bagabag', 'Sta. Fe'], distance: '74 km', fareMin: 140, fareMax: 160, timeMin: 105, timeMax: 105 },
+  { pair: ['Bambang', 'Aritao'], distance: '15 km', fareMin: 30, fareMax: 35, timeMin: 20, timeMax: 25 },
+  { pair: ['Bambang', 'Sta. Fe'], distance: '33 km', fareMin: 65, fareMax: 75, timeMin: 45, timeMax: 55 }
+];
+
+const getReferenceKey = (a, b) => [a, b].sort().join('|');
+
+const ROUTE_REFERENCE = ROUTE_REFERENCE_DATA.reduce((acc, r) => {
+  acc[getReferenceKey(r.pair[0], r.pair[1])] = r;
+  return acc;
+}, {});
+
+const getReference = (origin, destination) => {
+  if (!origin || !destination || origin === destination) return null;
+  return ROUTE_REFERENCE[getReferenceKey(origin, destination)] || null;
+};
+
+const formatRange = (min, max, unit) =>
+  min === max ? `${min}${unit}` : `${min}–${max}${unit}`;
 
 const Routes = () => {
   const { user } = useAuth();
@@ -50,6 +86,7 @@ const Routes = () => {
   });
   const [formErrors, setFormErrors] = useState({});
   const [submitLoading, setSubmitLoading] = useState(false);
+  const [showReference, setShowReference] = useState(false);
 
   // Fetch routes from server
   const fetchRoutes = async () => {
@@ -60,7 +97,7 @@ const Routes = () => {
       if (response.data.success) {
         setRoutes(response.data.data);
       } else {
-        throw new Error(response.data.message || 'Failed to retrieve routes registry.');
+        throw new Error(response.data.message || 'Failed to retrieve routes.');
       }
     } catch (err) {
       console.error('Error fetching routes:', err);
@@ -70,13 +107,13 @@ const Routes = () => {
     }
   };
 
-useEffect(() => {
-  const loadRoutes = async () => {
-    await fetchRoutes();
-  };
+  useEffect(() => {
+    const loadRoutes = async () => {
+      await fetchRoutes();
+    };
 
-  loadRoutes();
-}, []);
+    loadRoutes();
+  }, []);
 
   // Success Notification
   const triggerSuccess = (msg) => {
@@ -91,8 +128,8 @@ useEffect(() => {
     const { name, value } = e.target;
     setFormData((prev) => ({
       ...prev,
-      [name]: (name === 'estimatedTravelTime' || name === 'estimatedFare') 
-        ? (value === '' ? '' : Number(value)) 
+      [name]: (name === 'estimatedTravelTime' || name === 'estimatedFare')
+        ? (value === '' ? '' : Number(value))
         : value
     }));
 
@@ -141,7 +178,7 @@ useEffect(() => {
       console.error('Error creating route:', err);
       const serverMsg = err.response?.data?.message || 'Failed to create route.';
       if (serverMsg.toLowerCase().includes('duplicate') || serverMsg.toLowerCase().includes('already exists')) {
-        setFormErrors({ form: 'A travel route with this origin and destination combination is already registered.' });
+        setFormErrors({ form: 'A route with this origin and destination combination is already registered.' });
       } else {
         setFormErrors({ form: serverMsg });
       }
@@ -168,7 +205,7 @@ useEffect(() => {
       console.error('Error updating route:', err);
       const serverMsg = err.response?.data?.message || 'Failed to update route.';
       if (serverMsg.toLowerCase().includes('duplicate') || serverMsg.toLowerCase().includes('already exists')) {
-        setFormErrors({ form: 'A travel route with this origin and destination combination is already registered.' });
+        setFormErrors({ form: 'A route with this origin and destination combination is already registered.' });
       } else {
         setFormErrors({ form: serverMsg });
       }
@@ -191,7 +228,7 @@ useEffect(() => {
       }
     } catch (err) {
       console.error('Error deleting route:', err);
-      triggerSuccess(`Error: ${err.response?.data?.message || 'Could not delete corridor route.'}`);
+      triggerSuccess(`Error: ${err.response?.data?.message || 'Could not delete route.'}`);
       setIsDeleteOpen(false);
     } finally {
       setSubmitLoading(false);
@@ -214,6 +251,7 @@ useEffect(() => {
       status: route.status || 'Active'
     });
     setFormErrors({});
+    setShowReference(false);
     setIsEditOpen(true);
   };
 
@@ -232,6 +270,7 @@ useEffect(() => {
     });
     setFormErrors({});
     setSelectedRoute(null);
+    setShowReference(false);
   };
 
   // Sorting
@@ -280,6 +319,54 @@ useEffect(() => {
       return 0;
     });
 
+  const referenceData = getReference(formData.origin, formData.destination);
+
+  // Shared reference block, reused inside both Add and Edit modals
+  const ReferenceToggle = () => (
+    <div className="space-y-2">
+      <button
+        type="button"
+        onClick={() => setShowReference((prev) => !prev)}
+        className="text-[10px] font-mono text-[#F97316] hover:text-[#EA580C] flex items-center gap-1.5 transition-colors cursor-pointer"
+      >
+        <Info className="w-3.5 h-3.5" />
+        <span>{showReference ? 'Hide' : 'View'} typical fare & travel time for this route</span>
+      </button>
+
+      <AnimatePresence>
+        {showReference && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            className="overflow-hidden"
+          >
+            {referenceData ? (
+              <div className="rounded-lg border border-[#F97316]/20 bg-[#F97316]/5 p-3 space-y-1.5">
+                <div className="flex items-center justify-between text-[10px] font-mono text-[#F97316] uppercase">
+                  <span>{formData.origin} → {formData.destination}</span>
+                  <span>{referenceData.distance}</span>
+                </div>
+                <div className="flex items-center justify-between text-xs text-white">
+                  <span className="text-[#A1A1AA]">Typical Travel Time</span>
+                  <span className="font-mono">{formatRange(referenceData.timeMin, referenceData.timeMax, ' mins')}</span>
+                </div>
+                <div className="flex items-center justify-between text-xs text-white">
+                  <span className="text-[#A1A1AA]">Typical Fare</span>
+                  <span className="font-mono">₱{referenceData.fareMin}–₱{referenceData.fareMax}</span>
+                </div>
+              </div>
+            ) : (
+              <div className="rounded-lg border border-[#27272A] bg-[#09090B] p-3 text-[10px] text-[#A1A1AA] font-mono">
+                No reference data available yet for this pair.
+              </div>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+
   return (
     <div className="space-y-8 select-none">
       {/* Top Banner Tagline */}
@@ -290,17 +377,17 @@ useEffect(() => {
             <Map className="w-5 h-5 text-[#F97316]" />
           </div>
           <div>
-            <h3 className="text-sm font-semibold text-[#FFFFFF]">Transit Corridor Route Manager</h3>
-            <p className="text-xs text-[#A1A1AA] font-mono mt-0.5">Plan Routes. Manage Trips. Monitor Operations.</p>
+            <h3 className="text-sm font-semibold text-[#FFFFFF]">Route Management</h3>
+            <p className="text-xs text-[#A1A1AA] font-mono mt-0.5">Manage travel routes and fare information across the terminal network.</p>
           </div>
         </div>
-        {!isAdmin && (
+        {isAdmin && (
           <button
             onClick={openAddModal}
             className="px-4 py-2 bg-[#F97316] hover:bg-[#EA580C] text-xs font-bold text-[#FFFFFF] rounded-lg shadow-md shadow-[#F97316]/10 hover:shadow-lg hover:shadow-[#F97316]/20 transition-all flex items-center justify-center gap-1.5 self-start sm:self-center cursor-pointer"
           >
             <Plus className="w-4 h-4" />
-            <span>Register Travel Route</span>
+            <span>Add Route</span>
           </button>
         )}
       </div>
@@ -325,49 +412,49 @@ useEffect(() => {
         {/* Total Routes */}
         <div className="bg-[#18181B] border border-[#27272A] p-4 rounded-xl flex flex-col justify-between h-28 relative overflow-hidden backdrop-blur-md">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-mono text-[#A1A1AA] uppercase">Total Corridors</span>
+            <span className="text-xs font-mono text-[#A1A1AA] uppercase">Total Routes</span>
             <div className="p-1 rounded bg-[#F97316]/5 border border-[#F97316]/10 text-[#F97316]">
               <Map className="w-4 h-4" />
             </div>
           </div>
           <div>
             <h4 className="text-2xl font-black text-[#FFFFFF] font-mono">{loading ? '...' : totalRoutes}</h4>
-            <span className="text-[10px] text-[#A1A1AA] mt-0.5 block">Configured Provincial Paths</span>
+            <span className="text-[10px] text-[#A1A1AA] mt-0.5 block">Registered routes</span>
           </div>
         </div>
 
         {/* Active Routes */}
         <div className="bg-[#18181B] border border-[#27272A] p-4 rounded-xl flex flex-col justify-between h-28 relative overflow-hidden backdrop-blur-md">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-mono text-[#A1A1AA] uppercase">Active Corridors</span>
+            <span className="text-xs font-mono text-[#A1A1AA] uppercase">Active Routes</span>
             <div className="p-1 rounded bg-emerald-500/5 border border-emerald-500/10 text-emerald-400">
               <CheckCircle2 className="w-4 h-4" />
             </div>
           </div>
           <div>
             <h4 className="text-2xl font-black text-emerald-400 font-mono">{loading ? '...' : activeRoutes}</h4>
-            <span className="text-[10px] text-[#A1A1AA] mt-0.5 block">Approved active lanes</span>
+            <span className="text-[10px] text-[#A1A1AA] mt-0.5 block">Currently operating</span>
           </div>
         </div>
 
         {/* Inactive Routes */}
         <div className="bg-[#18181B] border border-[#27272A] p-4 rounded-xl flex flex-col justify-between h-28 relative overflow-hidden backdrop-blur-md">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-mono text-[#A1A1AA] uppercase">Suspended Lanes</span>
+            <span className="text-xs font-mono text-[#A1A1AA] uppercase">Inactive Routes</span>
             <div className="p-1 rounded bg-[#EF4444]/5 border border-[#EF4444]/10 text-[#EF4444]">
               <AlertCircle className="w-4 h-4" />
             </div>
           </div>
           <div>
             <h4 className="text-2xl font-black text-[#EF4444] font-mono">{loading ? '...' : inactiveRoutes}</h4>
-            <span className="text-[10px] text-[#A1A1AA] mt-0.5 block">Temporarily closed lanes</span>
+            <span className="text-[10px] text-[#A1A1AA] mt-0.5 block">Not currently in service</span>
           </div>
         </div>
 
         {/* Average Fare */}
         <div className="bg-[#18181B] border border-[#27272A] p-4 rounded-xl flex flex-col justify-between h-28 relative overflow-hidden backdrop-blur-md">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-mono text-[#A1A1AA] uppercase">Average Base Fare</span>
+            <span className="text-xs font-mono text-[#A1A1AA] uppercase">Mean Route Fare</span>
             <div className="p-1 rounded bg-sky-500/5 border border-sky-500/10 text-sky-400">
               <TrendingUp className="w-4 h-4" />
             </div>
@@ -376,7 +463,7 @@ useEffect(() => {
             <h4 className="text-2xl font-black text-sky-400 font-mono">
               ₱{loading ? '...' : averageFare.toFixed(2)}
             </h4>
-            <span className="text-[10px] text-[#A1A1AA] mt-0.5 block">Estimated passenger cost</span>
+            <span className="text-[10px] text-[#A1A1AA] mt-0.5 block">Average across all registered routes</span>
           </div>
         </div>
       </div>
@@ -450,7 +537,7 @@ useEffect(() => {
               transition={{ repeat: Infinity, duration: 1.5, ease: 'linear' }}
               className="w-8 h-8 border-2 border-[#F97316] border-t-transparent rounded-full"
             />
-            <span className="text-xs font-mono text-[#A1A1AA]">Retrieving Corridor Records...</span>
+            <span className="text-xs font-mono text-[#A1A1AA]">Retrieving Route Records...</span>
           </div>
         ) : filteredRoutes.length === 0 ? (
           <div className="h-64 flex flex-col items-center justify-center text-center p-6 space-y-4">
@@ -460,15 +547,17 @@ useEffect(() => {
             <div className="max-w-xs">
               <h4 className="text-sm font-semibold text-[#FFFFFF]">No Routes Registered</h4>
               <p className="text-xs text-[#A1A1AA] mt-1.5">
-                No travel corridors match your filters. Register a new route combination to proceed.
+                No routes match your filters{isAdmin ? '. Register a new route to proceed.' : '.'}
               </p>
             </div>
-            <button
-              onClick={openAddModal}
-              className="px-3 py-1.5 bg-[#F97316]/10 border border-[#F97316]/20 hover:bg-[#F97316]/20 text-[#F97316] text-xs font-semibold rounded-lg transition-colors cursor-pointer"
-            >
-              Add Route
-            </button>
+            {isAdmin && (
+              <button
+                onClick={openAddModal}
+                className="px-3 py-1.5 bg-[#F97316]/10 border border-[#F97316]/20 hover:bg-[#F97316]/20 text-[#F97316] text-xs font-semibold rounded-lg transition-colors cursor-pointer"
+              >
+                Add Route
+              </button>
+            )}
           </div>
         ) : (
           <RouteTable
@@ -478,17 +567,18 @@ useEffect(() => {
             sortBy={sortBy}
             sortOrder={sortOrder}
             onSort={handleSort}
+            isAdmin={isAdmin}
           />
         )}
       </div>
 
-      {/* --- MODALS DIALOGS --- */}
+      {/* --- MODALS DIALOGS (Admin only reaches these) --- */}
 
       {/* Add Route Form Modal */}
       <FormModal
         isOpen={isAddOpen}
         onClose={() => setIsAddOpen(false)}
-        title="Register Travel Route"
+        title="Add Route"
         icon={<Map className="w-5 h-5" />}
       >
         <form onSubmit={handleAddSubmit} className="space-y-4">
@@ -537,6 +627,8 @@ useEffect(() => {
             )}
           </div>
 
+          <ReferenceToggle />
+
           {/* Travel Time Input */}
           <div className="space-y-1.5">
             <label className="text-xs font-mono text-[#A1A1AA] uppercase block">Travel Time (Minutes)</label>
@@ -551,13 +643,11 @@ useEffect(() => {
                 formErrors.estimatedTravelTime ? 'border-[#EF4444] focus:border-[#EF4444]/50' : 'border-[#27272A] focus:border-[#F97316]/50'
               }`}
             />
-            {formErrors.estimatedTravelTime ? (
+            {formErrors.estimatedTravelTime && (
               <p className="text-[10px] text-[#EF4444] mt-1 flex items-center gap-1">
                 <AlertCircle className="w-3.5 h-3.5 shrink-0" />
                 <span>{formErrors.estimatedTravelTime}</span>
               </p>
-            ) : (
-              <span className="text-[9px] font-mono text-[#A1A1AA] block mt-1">Average travel length over corridor in minutes</span>
             )}
           </div>
 
@@ -615,7 +705,7 @@ useEffect(() => {
               {submitLoading ? (
                 <RefreshCw className="w-4 h-4 animate-spin" />
               ) : (
-                <span>Register Route</span>
+                <span>Add Route</span>
               )}
             </button>
           </div>
@@ -626,7 +716,7 @@ useEffect(() => {
       <FormModal
         isOpen={isEditOpen}
         onClose={() => setIsEditOpen(false)}
-        title={selectedRoute ? `Modify Route: ${selectedRoute.routeCode}` : 'Modify Route'}
+        title={selectedRoute ? `Edit Route: ${selectedRoute.routeCode}` : 'Edit Route'}
         icon={<Map className="w-5 h-5 text-amber-500" />}
       >
         <form onSubmit={handleEditSubmit} className="space-y-4">
@@ -637,7 +727,7 @@ useEffect(() => {
             </div>
           )}
 
-          {/* Origin Dropdown (Read Only or change) */}
+          {/* Origin Dropdown */}
           <div className="space-y-1.5">
             <label className="text-xs font-mono text-[#A1A1AA] uppercase block">Origin Municipality</label>
             <select
@@ -674,6 +764,8 @@ useEffect(() => {
               </p>
             )}
           </div>
+
+          <ReferenceToggle />
 
           {/* Travel Time Input */}
           <div className="space-y-1.5">
@@ -762,8 +854,8 @@ useEffect(() => {
         isOpen={isDeleteOpen}
         onClose={() => setIsDeleteOpen(false)}
         onConfirm={handleDeleteConfirm}
-        title="Delete Corridor Route?"
-        message={selectedRoute ? `This will permanently delete route ${selectedRoute.routeCode} (${selectedRoute.origin} to ${selectedRoute.destination}) from the system registry. Active schedules mapping to this corridor will fail to function. Proceed with caution.` : ''}
+        title="Delete Route?"
+        message={selectedRoute ? `This will permanently delete route ${selectedRoute.routeCode} (${selectedRoute.origin} to ${selectedRoute.destination}) from the system registry. Active schedules mapping to this route will fail to function. Proceed with caution.` : ''}
         confirmText="Yes, delete route"
         cancelText="Cancel"
         type="danger"

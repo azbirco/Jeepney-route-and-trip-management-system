@@ -6,7 +6,8 @@ const RouteTable = ({
   onDelete,
   sortBy,
   sortOrder,
-  onSort
+  onSort,
+  isAdmin
 }) => {
 
   const SortHeader = ({ label, field }) => (
@@ -48,9 +49,11 @@ const RouteTable = ({
               Status
             </th>
 
-            <th className="px-4 py-3 text-left">
-              Actions
-            </th>
+            {isAdmin && (
+              <th className="px-4 py-3 text-left">
+                Actions
+              </th>
+            )}
           </tr>
         </thead>
 
@@ -83,7 +86,7 @@ const RouteTable = ({
 
               <td className="px-4 py-4">
                 <span
-                  className={`px-2 py-1 rounded-md text-[10px] font-semibold ${
+                  className={`px-2 py-1 rounded-md text-[10px] font-semibold inline-block ${
                     route.status === "Active"
                       ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
                       : "bg-red-500/10 text-red-400 border border-red-500/20"
@@ -93,28 +96,31 @@ const RouteTable = ({
                 </span>
               </td>
 
-              <td className="px-4 py-4">
-                <div className="flex items-center gap-2">
+              {isAdmin && (
+                <td className="px-4 py-4">
+                  <div className="flex items-center gap-2">
 
-                  <button
-                    onClick={() => onEdit(route)}
-                    className="p-2 rounded-lg border border-[#27272A] text-[#A1A1AA] hover:text-white hover:bg-[#27272A] transition-colors"
-                    title="Edit Route"
-                  >
-                    <Edit className="w-4 h-4" />
-                  </button>
+                    <button
+                      onClick={() => onEdit(route)}
+                      className="px-2 py-1 rounded-md border border-[#27272A] text-[#A1A1AA] hover:text-white hover:bg-[#27272A] transition-colors flex items-center gap-1 text-[10px] font-semibold"
+                      title="Edit Route"
+                    >
+                      <Edit className="w-3.5 h-3.5" />
+                      <span>Edit</span>
+                    </button>
 
+                    <button
+                      onClick={() => onDelete(route)}
+                      className="px-2 py-1 rounded-md border border-red-500/20 text-red-400 hover:bg-red-500/10 transition-colors flex items-center gap-1 text-[10px] font-semibold"
+                      title="Delete Route"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>Delete</span>
+                    </button>
 
-                  <button
-                    onClick={() => onDelete(route)}
-                    className="p-2 rounded-lg border border-red-500/20 text-red-400 hover:bg-red-500/10 transition-colors"
-                    title="Delete Route"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-
-                </div>
-              </td>
+                  </div>
+                </td>
+              )}
 
             </tr>
           ))}

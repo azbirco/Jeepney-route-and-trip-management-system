@@ -20,15 +20,17 @@ import { useAuth } from '../context/AuthContext';
 
 // Default seating capacity suggested per type. Real-world plate-to-plate
 // capacity still varies by owner modification, so this only pre-fills the
-// field — Terminal Personnel can always override it before saving.
+// field — Admin can always override it before saving.
 const getDefaultCapacity = (type) => (type === 'E-Jeep' ? 23 : 18);
 
 const Jeepneys = () => {
   const { user } = useAuth();
-  // Only Terminal Personnel manage the fleet registry. Admin gets a
-  // read-only oversight view (central dashboard), and Driver has no
-  // business creating/editing/deleting units — they only drive them.
-  const canManageJeepneys = user?.role === 'Terminal Personnel';
+  // Only Admin manages the fleet registry — plate numbers, unit types, and
+  // seating capacity are setup/master data, not day-to-day operational
+  // decisions. Terminal Personnel get a read-only view (they use existing
+  // units when building schedules/trips), and Driver has no business
+  // creating/editing/deleting units — they only drive them.
+  const canManageJeepneys = user?.role === 'Admin';
 
   // State variables
   const [jeepneys, setJeepneys] = useState([]);

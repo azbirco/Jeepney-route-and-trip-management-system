@@ -30,6 +30,41 @@ const scheduleSchema = new mongoose.Schema({
       'Inactive'
     ],
     default: 'Active'
+  },
+
+  // =========================
+  // Admin Override tracking
+  // =========================
+  // Terminal Personnel owns normal CRUD on schedules. These fields exist
+  // solely to record and surface an Admin's correction of a bad entry,
+  // and to let Terminal Personnel acknowledge or dispute that correction.
+
+  lastOverriddenBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    default: null
+  },
+
+  overrideReason: {
+    type: String,
+    default: ''
+  },
+
+  overriddenAt: {
+    type: Date,
+    default: null
+  },
+
+  // true while waiting for Terminal Personnel to acknowledge or dispute
+  overridePending: {
+    type: Boolean,
+    default: false
+  },
+
+  // filled in by Terminal Personnel if they push back on the override
+  overrideDisputeReason: {
+    type: String,
+    default: ''
   }
 
 },

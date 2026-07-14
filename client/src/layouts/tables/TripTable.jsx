@@ -5,24 +5,38 @@ import {
   ArrowDown,
   MapPin,
   Bus,
+  Calendar,
   Clock,
   Users,
   UserCircle,
   PlayCircle,
   CheckCircle2,
   BellRing,
-  AlertOctagon
+  AlertOctagon,
+  ShieldAlert,
+  AlertTriangle
 } from "lucide-react";
 
+const formatTime12Hour = (time24) => {
+  if (!time24) return '--';
+  const [hourStr, minute] = time24.split(':');
+  const hour = parseInt(hourStr, 10);
+  const period = hour >= 12 ? 'PM' : 'AM';
+  const hour12 = hour % 12 === 0 ? 12 : hour % 12;
+  return `${hour12}:${minute} ${period}`;
+};
 
 export default function TripTable({
   trips,
   onEdit,
   onDelete,
+  onOverride,
+  onReviewOverride,
   sortBy,
   sortOrder,
   onSort,
   isDriver,
+  isAdmin,
   onStartTrip,
   onMarkArrived,
   onConfirmArrival
@@ -52,13 +66,19 @@ export default function TripTable({
     }
   };
 
+  const getOverrideButtonLabel = (trip) => {
+    if (trip.overrideDisputeReason) return "Resolve Dispute";
+    if (trip.overridePending) return "Revise Override";
+    return "Override";
+  };
+
 
 
   return (
 
     <div className="overflow-x-auto">
 
-      <table className="w-full min-w-[900px]">
+      <table className="w-full min-w-[1050px]">
 
         <thead className="bg-[#09090B] border-b border-[#27272A]">
           <tr>
@@ -77,9 +97,13 @@ export default function TripTable({
             )}
 
             <th onClick={() => onSort("departureDate")} className="px-5 py-4 text-left text-[11px] font-mono uppercase text-[#A1A1AA] cursor-pointer hover:text-white">
-              Departure
+              Date
               <SortIcon field="departureDate"/>
             </th>
+
+            <th className="px-5 py-4 text-left text-[11px] font-mono uppercase text-[#A1A1AA]">Departure</th>
+
+            <th className="px-5 py-4 text-left text-[11px] font-mono uppercase text-[#A1A1AA]">Arrival</th>
 
             <th className="px-5 py-4 text-left text-[11px] font-mono uppercase text-[#A1A1AA]">Passengers</th>
 
@@ -97,6 +121,11 @@ export default function TripTable({
           const isPendingConfirmation = trip.arrivalReported && trip.status !== "Arrived";
           const isNewOrCancelledForDriver = isDriver && !trip.driverNotified;
 
+          const departureTime24 = trip.actualDepartureTime || trip.schedule?.departureTime || null;
+          const arrivalTime24 = trip.actualArrivalTime || trip.schedule?.expectedArrivalTime || null;
+          const departureDisplay = formatTime12Hour(departureTime24);
+          const arrivalDisplay = formatTime12Hour(arrivalTime24);
+
           return (
 
           <tr
@@ -104,7 +133,7 @@ export default function TripTable({
             className={`
               border-b border-[#27272A] transition-colors
               ${
-                isPendingConfirmation || isNewOrCancelledForDriver
+                isPendingConfirmation || isNewOrCancelledForDriver || trip.overridePending
                   ? "bg-amber-500/5 hover:bg-amber-500/10"
                   : "hover:bg-[#18181B]"
               }
@@ -151,13 +180,24 @@ export default function TripTable({
 
             <td className="px-5 py-4">
               <div className="flex items-center gap-2">
+                <Calendar className="w-4 h-4 text-[#A1A1AA]"/>
+                <span className="text-sm text-white">
+                  {trip.departureDate ? new Date(trip.departureDate).toLocaleDateString() : "N/A"}
+                </span>
+              </div>
+            </td>
+
+            <td className="px-5 py-4">
+              <div className="flex items-center gap-2">
                 <Clock className="w-4 h-4 text-[#A1A1AA]"/>
-                <div>
-                  <div className="text-sm text-white">
-                    {trip.departureDate ? new Date(trip.departureDate).toLocaleDateString() : "N/A"}
-                  </div>
-                  <div className="text-xs text-[#A1A1AA]">{trip.schedule?.departureTime || "--:--"}</div>
-                </div>
+                <span className="text-sm text-white">{departureDisplay}</span>
+              </div>
+            </td>
+
+            <td className="px-5 py-4">
+              <div className="flex items-center gap-2">
+                <Clock className="w-4 h-4 text-[#A1A1AA]"/>
+                <span className="text-sm text-white">{arrivalDisplay}</span>
               </div>
             </td>
 
@@ -197,6 +237,20 @@ export default function TripTable({
                 </div>
               )}
 
+              {!isDriver && trip.overridePending && (
+                <button
+                  onClick={() => onReviewOverride(trip)}
+                  className={`flex items-center gap-1 mt-1.5 text-[10px] font-semibold cursor-pointer hover:underline ${
+                    trip.overrideDisputeReason ? "text-red-400" : "text-amber-400"
+                  }`}
+                >
+                  <AlertTriangle className="w-3 h-3"/>
+                  {trip.overrideDisputeReason
+                    ? "Disputed — Needs Admin Review"
+                    : "Admin-Corrected — Needs Review"}
+                </button>
+              )}
+
             </td>
 
             <td className="px-5 py-4">
@@ -234,33 +288,45 @@ export default function TripTable({
                       <span className="text-[10px] text-[#A1A1AA] italic">No action available</span>
                     )}
                   </>
+                ) : isPendingConfirmation ? (
+                  <button
+                    onClick={() => onConfirmArrival(trip)}
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-400 hover:bg-amber-500/20 transition text-xs font-semibold"
+                    title="Confirm Arrival"
+                  >
+                    <CheckCircle2 className="w-4 h-4"/>
+                    Confirm Arrival
+                  </button>
+                ) : isAdmin ? (
+                  <button
+                    onClick={() => onOverride(trip)}
+                    className={`flex items-center gap-1.5 px-3 py-2 rounded-lg border transition text-xs font-semibold cursor-pointer ${
+                      trip.overrideDisputeReason
+                        ? "bg-red-500/10 border-red-500/20 text-red-400 hover:bg-red-500/20"
+                        : "bg-amber-500/10 border-amber-500/20 text-amber-400 hover:bg-amber-500/20"
+                    }`}
+                  >
+                    <ShieldAlert className="w-4 h-4"/>
+                    <span>{getOverrideButtonLabel(trip)}</span>
+                  </button>
                 ) : (
                   <>
-                    {isPendingConfirmation ? (
-                      <button
-                        onClick={() => onConfirmArrival(trip)}
-                        className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-400 hover:bg-amber-500/20 transition text-xs font-semibold"
-                        title="Confirm Arrival"
-                      >
-                        <CheckCircle2 className="w-4 h-4"/>
-                        Confirm Arrival
-                      </button>
-                    ) : (
-                      <button
-                        onClick={() => onEdit(trip)}
-                        className="p-2 rounded-lg bg-blue-500/10 border border-blue-500/20 text-blue-400 hover:bg-blue-500/20 transition"
-                        title="Edit Trip"
-                      >
-                        <Edit className="w-4 h-4"/>
-                      </button>
-                    )}
+                    <button
+                      onClick={() => onEdit(trip)}
+                      className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-blue-500/10 border border-blue-500/20 text-blue-400 hover:bg-blue-500/20 transition text-xs font-semibold"
+                      title="Edit Trip"
+                    >
+                      <Edit className="w-4 h-4"/>
+                      <span>Edit</span>
+                    </button>
 
                     <button
                       onClick={() => onDelete(trip)}
-                      className="p-2 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500/20 transition"
+                      className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500/20 transition text-xs font-semibold"
                       title="Delete Trip"
                     >
                       <Trash2 className="w-4 h-4"/>
+                      <span>Delete</span>
                     </button>
                   </>
                 )}

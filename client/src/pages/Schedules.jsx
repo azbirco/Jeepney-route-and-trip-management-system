@@ -8,8 +8,10 @@ import {
   AlertCircle,
   RefreshCw,
   X,
-  AlertTriangle
- 
+  AlertTriangle,
+  ShieldAlert,
+  ThumbsUp,
+  ThumbsDown
 } from 'lucide-react';
 import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
@@ -24,7 +26,8 @@ const Schedules = () => {
 
   // Core registries
   const [schedules, setSchedules] = useState([]);
-  const [routes, setRoutes] = useState([]);
+  const [routes, setRoutes] = useState([]); // Active-only routes (for new/normal selection)
+  const [allRoutes, setAllRoutes] = useState([]); // Unfiltered, used to resolve locked/inactive routes
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [successMsg, setSuccessMsg] = useState(null);
@@ -39,6 +42,8 @@ const Schedules = () => {
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+  const [isOverrideOpen, setIsOverrideOpen] = useState(false);
+  const [isReviewOpen, setIsReviewOpen] = useState(false);
 
   // Form input state
   const [selectedSchedule, setSelectedSchedule] = useState(null);
@@ -49,6 +54,20 @@ const Schedules = () => {
   });
   const [formErrors, setFormErrors] = useState({});
   const [submitLoading, setSubmitLoading] = useState(false);
+
+  // Admin override form state
+  const [overrideFormData, setOverrideFormData] = useState({
+    route: '',
+    departureTime: '06:00',
+    status: 'Active',
+    reason: ''
+  });
+  const [overrideErrors, setOverrideErrors] = useState({});
+
+  // Terminal Personnel review (accept/dispute) state
+  const [disputeMode, setDisputeMode] = useState(false);
+  const [disputeReason, setDisputeReason] = useState('');
+  const [reviewError, setReviewError] = useState(null);
 
   // Fetch schedules & routes
   const fetchData = async () => {
@@ -64,8 +83,11 @@ const Schedules = () => {
         setSchedules(schedulesRes.data.data);
       }
       if (routesRes.data.success) {
-        // Only allow active routes to be scheduled
-        const activeOnly = routesRes.data.data.filter((r) => r.status === 'Active' || !r.status);
+        const allFetchedRoutes = routesRes.data.data;
+        setAllRoutes(allFetchedRoutes);
+
+        // Only allow active routes to be scheduled/newly selected
+        const activeOnly = allFetchedRoutes.filter((r) => r.status === 'Active' || !r.status);
         setRoutes(activeOnly);
         if (activeOnly.length > 0) {
           setFormData((prev) => ({ ...prev, route: activeOnly[0]._id }));
@@ -92,6 +114,19 @@ const Schedules = () => {
     setTimeout(() => {
       setSuccessMsg(null);
     }, 4000);
+  };
+
+  // Builds the route dropdown options for a given modal instance.
+  // If the currently-assigned route has gone Inactive since the schedule
+  // was created, it's appended (and rendered disabled) so the true value
+  // stays visible instead of showing blank — but it can't be reselected
+  // once changed, and no other Inactive route becomes selectable.
+  const getRouteOptions = (currentRouteId) => {
+    const isCurrentActive = routes.some((r) => r._id === currentRouteId);
+    if (!currentRouteId || isCurrentActive) return routes;
+
+    const inactiveRoute = allRoutes.find((r) => r._id === currentRouteId);
+    return inactiveRoute ? [...routes, inactiveRoute] : routes;
   };
 
   // Inputs
@@ -200,6 +235,108 @@ const Schedules = () => {
     }
   };
 
+  // Admin Override inputs
+  const handleOverrideInputChange = (e) => {
+    const { name, value } = e.target;
+    setOverrideFormData((prev) => ({ ...prev, [name]: value }));
+
+    if (overrideErrors[name]) {
+      setOverrideErrors((prev) => ({ ...prev, [name]: null }));
+    }
+  };
+
+  const validateOverrideForm = () => {
+    const errors = {};
+
+    if (!overrideFormData.route) {
+      errors.route = 'An active travel route is required.';
+    }
+
+    if (!overrideFormData.departureTime) {
+      errors.departureTime = 'Departure time is required.';
+    } else {
+      const timeMatch = overrideFormData.departureTime.match(/^([01]\d|2[0-3]):([0-5]\d)$/);
+      if (!timeMatch) {
+        errors.departureTime = 'Departure time must be in HH:MM format.';
+      }
+    }
+
+    if (!overrideFormData.reason || !overrideFormData.reason.trim()) {
+      errors.reason = 'You must explain why this correction is being made.';
+    }
+
+    setOverrideErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  // Admin Override Submit
+  const handleOverrideSubmit = async (e) => {
+    e.preventDefault();
+    if (!validateOverrideForm()) return;
+
+    setSubmitLoading(true);
+    try {
+      const response = await api.patch(`/schedules/${selectedSchedule._id}/override`, overrideFormData);
+      if (response.data.success) {
+        triggerSuccess(`Schedule ${response.data.data.scheduleCode} corrected via admin override.`);
+        setIsOverrideOpen(false);
+        setSelectedSchedule(null);
+        fetchData();
+      }
+    } catch (err) {
+      console.error('Error applying override:', err);
+      setOverrideErrors({ form: err.response?.data?.message || 'Failed to apply override.' });
+    } finally {
+      setSubmitLoading(false);
+    }
+  };
+
+  // Terminal Personnel: Accept override
+  const handleAcknowledgeOverride = async () => {
+    if (!selectedSchedule) return;
+    setSubmitLoading(true);
+    try {
+      const response = await api.patch(`/schedules/${selectedSchedule._id}/acknowledge-override`);
+      if (response.data.success) {
+        triggerSuccess(`Override on ${selectedSchedule.scheduleCode} acknowledged.`);
+        setIsReviewOpen(false);
+        setSelectedSchedule(null);
+        fetchData();
+      }
+    } catch (err) {
+      console.error('Error acknowledging override:', err);
+      setReviewError(err.response?.data?.message || 'Could not acknowledge override.');
+    } finally {
+      setSubmitLoading(false);
+    }
+  };
+
+  // Terminal Personnel: Dispute override
+  const handleDisputeOverride = async () => {
+    if (!selectedSchedule) return;
+
+    if (!disputeReason.trim()) {
+      setReviewError('Please explain why you are disputing this correction.');
+      return;
+    }
+
+    setSubmitLoading(true);
+    try {
+      const response = await api.patch(`/schedules/${selectedSchedule._id}/dispute-override`, { disputeReason });
+      if (response.data.success) {
+        triggerSuccess(`Dispute submitted for ${selectedSchedule.scheduleCode}. Admin has been flagged.`);
+        setIsReviewOpen(false);
+        setSelectedSchedule(null);
+        fetchData();
+      }
+    } catch (err) {
+      console.error('Error submitting dispute:', err);
+      setReviewError(err.response?.data?.message || 'Could not submit dispute.');
+    } finally {
+      setSubmitLoading(false);
+    }
+  };
+
   const openAddModal = () => {
     resetForm();
     setIsAddOpen(true);
@@ -219,6 +356,26 @@ const Schedules = () => {
   const openDeleteModal = (sched) => {
     setSelectedSchedule(sched);
     setIsDeleteOpen(true);
+  };
+
+  const openOverrideModal = (sched) => {
+    setSelectedSchedule(sched);
+    setOverrideFormData({
+      route: sched.route ? sched.route._id : '',
+      departureTime: sched.departureTime,
+      status: sched.status || 'Active',
+      reason: ''
+    });
+    setOverrideErrors({});
+    setIsOverrideOpen(true);
+  };
+
+  const openReviewModal = (sched) => {
+    setSelectedSchedule(sched);
+    setDisputeMode(false);
+    setDisputeReason('');
+    setReviewError(null);
+    setIsReviewOpen(true);
   };
 
   const resetForm = () => {
@@ -307,7 +464,9 @@ const filteredSchedules = schedules
           </div>
           <div>
             <h3 className="text-sm font-semibold text-[#FFFFFF]">Departure Schedule Manager</h3>
-            <p className="text-xs text-[#A1A1AA] font-mono mt-0.5">Plan Routes. Manage Trips. Monitor Operations.</p>
+            <p className="text-xs text-[#A1A1AA] font-mono mt-0.5">
+              {isAdmin ? 'View operations. Correct errors when needed.' : 'Plan Routes. Manage Trips. Monitor Operations.'}
+            </p>
           </div>
         </div>
         {!isAdmin && (
@@ -473,7 +632,7 @@ const filteredSchedules = schedules
                 No trip schedules match your filters. Establish a new departure timing on an active corridor route.
               </p>
             </div>
-            {routes.length > 0 && (
+            {routes.length > 0 && !isAdmin && (
               <button
                 onClick={openAddModal}
                 className="px-3 py-1.5 bg-[#F97316]/10 border border-[#F97316]/20 hover:bg-[#F97316]/20 text-[#F97316] text-xs font-semibold rounded-lg transition-colors cursor-pointer"
@@ -487,9 +646,12 @@ const filteredSchedules = schedules
   schedules={filteredSchedules}
   onEdit={openEditModal}
   onDelete={openDeleteModal}
+  onOverride={openOverrideModal}
+  onReviewOverride={openReviewModal}
   sortBy={sortBy}
   sortOrder={sortOrder}
   onSort={handleSort}
+  isAdmin={isAdmin}
 />
         )}
       </div>
@@ -522,9 +684,10 @@ const filteredSchedules = schedules
                 formErrors.route ? 'border-[#EF4444]' : 'border-[#27272A]'
               }`}
             >
-              {routes.map((rt) => (
-                <option key={rt._id} value={rt._id}>
+              {getRouteOptions(formData.route).map((rt) => (
+                <option key={rt._id} value={rt._id} disabled={rt.status === 'Inactive'}>
                   {rt.routeCode}: {rt.origin} to {rt.destination} (₱{rt.estimatedFare})
+                  {rt.status === 'Inactive' ? ' — Inactive (Locked)' : ''}
                 </option>
               ))}
             </select>
@@ -622,9 +785,10 @@ const filteredSchedules = schedules
                 formErrors.route ? 'border-[#EF4444]' : 'border-[#27272A]'
               }`}
             >
-              {routes.map((rt) => (
-                <option key={rt._id} value={rt._id}>
+              {getRouteOptions(formData.route).map((rt) => (
+                <option key={rt._id} value={rt._id} disabled={rt.status === 'Inactive'}>
                   {rt.routeCode}: {rt.origin} to {rt.destination} (₱{rt.estimatedFare})
+                  {rt.status === 'Inactive' ? ' — Inactive (Locked)' : ''}
                 </option>
               ))}
             </select>
@@ -632,6 +796,12 @@ const filteredSchedules = schedules
               <p className="text-[10px] text-[#EF4444] mt-1 flex items-center gap-1 font-sans">
                 <AlertCircle className="w-3.5 h-3.5 shrink-0" />
                 <span>{formErrors.route}</span>
+              </p>
+            )}
+            {getRouteOptions(formData.route).some((rt) => rt._id === formData.route && rt.status === 'Inactive') && (
+              <p className="text-[9px] font-mono text-amber-400 mt-1 flex items-center gap-1">
+                <AlertTriangle className="w-3 h-3 shrink-0" />
+                <span>This route has since become Inactive. It's locked here for reference — reassign to an active route if needed.</span>
               </p>
             )}
           </div>
@@ -692,6 +862,239 @@ const filteredSchedules = schedules
             </button>
           </div>
         </form>
+      </FormModal>
+
+      {/* Admin Override Form Modal */}
+      <FormModal
+        isOpen={isOverrideOpen}
+        onClose={() => setIsOverrideOpen(false)}
+        title={selectedSchedule ? `Admin Override: ${selectedSchedule.scheduleCode}` : 'Admin Override'}
+        icon={<ShieldAlert className="w-5 h-5 text-amber-500" />}
+      >
+        <form onSubmit={handleOverrideSubmit} className="space-y-4">
+          <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg text-[11px] text-amber-400 leading-relaxed font-sans">
+            You're correcting an entry originally made by Terminal Personnel. This action is logged distinctly from a normal edit, and Terminal Personnel will be notified to review your correction.
+          </div>
+
+          {selectedSchedule?.overrideDisputeReason && (
+            <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-xs text-red-400 font-sans">
+              <strong className="block mb-1">Terminal Personnel disputed the previous override:</strong>
+              <span className="leading-relaxed">{selectedSchedule.overrideDisputeReason}</span>
+            </div>
+          )}
+
+          {overrideErrors.form && (
+            <div className="p-3 bg-[#EF4444]/10 border border-[#EF4444]/20 rounded-lg text-xs text-[#EF4444] flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 shrink-0" />
+              <span className="flex-1 leading-normal font-sans">{overrideErrors.form}</span>
+            </div>
+          )}
+
+          <div className="space-y-1.5">
+            <label className="text-xs font-mono text-[#A1A1AA] uppercase block">Assigned Corridor Route</label>
+            <select
+              name="route"
+              value={overrideFormData.route}
+              onChange={handleOverrideInputChange}
+              className={`w-full px-3.5 py-2.5 text-xs bg-[#09090B] border rounded-lg text-[#FFFFFF] outline-none focus:border-amber-500/50 transition-all cursor-pointer ${
+                overrideErrors.route ? 'border-[#EF4444]' : 'border-[#27272A]'
+              }`}
+            >
+              {getRouteOptions(overrideFormData.route).map((rt) => (
+                <option key={rt._id} value={rt._id} disabled={rt.status === 'Inactive'}>
+                  {rt.routeCode}: {rt.origin} to {rt.destination} (₱{rt.estimatedFare})
+                  {rt.status === 'Inactive' ? ' — Inactive (Locked)' : ''}
+                </option>
+              ))}
+            </select>
+            {overrideErrors.route && (
+              <p className="text-[10px] text-[#EF4444] mt-1 flex items-center gap-1 font-sans">
+                <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                <span>{overrideErrors.route}</span>
+              </p>
+            )}
+            {getRouteOptions(overrideFormData.route).some((rt) => rt._id === overrideFormData.route && rt.status === 'Inactive') && (
+              <p className="text-[9px] font-mono text-amber-400 mt-1 flex items-center gap-1">
+                <AlertTriangle className="w-3 h-3 shrink-0" />
+                <span>This route has since become Inactive. It's locked here for reference — reassign to an active route if needed.</span>
+              </p>
+            )}
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-xs font-mono text-[#A1A1AA] uppercase block">Departure Time (24-Hour Format)</label>
+            <input
+              type="time"
+              name="departureTime"
+              value={overrideFormData.departureTime}
+              onChange={handleOverrideInputChange}
+              className={`w-full px-3.5 py-2.5 text-xs bg-[#09090B] border rounded-lg text-[#FFFFFF] outline-none transition-all cursor-pointer ${
+                overrideErrors.departureTime ? 'border-[#EF4444] focus:border-[#EF4444]/50' : 'border-[#27272A] focus:border-amber-500/50'
+              }`}
+            />
+            {overrideErrors.departureTime && (
+              <p className="text-[10px] text-[#EF4444] mt-1 flex items-center gap-1">
+                <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                <span>{overrideErrors.departureTime}</span>
+              </p>
+            )}
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-xs font-mono text-[#A1A1AA] uppercase block">Operational Status</label>
+            <select
+              name="status"
+              value={overrideFormData.status}
+              onChange={handleOverrideInputChange}
+              className="w-full px-3.5 py-2.5 text-xs bg-[#09090B] border border-[#27272A] rounded-lg text-[#FFFFFF] outline-none focus:border-amber-500/50 transition-all cursor-pointer"
+            >
+              <option value="Active">Active</option>
+              <option value="Inactive">Inactive</option>
+            </select>
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-xs font-mono text-[#A1A1AA] uppercase block">Reason for Correction (Required)</label>
+            <textarea
+              name="reason"
+              value={overrideFormData.reason}
+              onChange={handleOverrideInputChange}
+              rows={3}
+              placeholder="e.g. Departure time was mistakenly entered as 08:00 instead of 06:00, confirmed with Terminal Personnel via phone."
+              className={`w-full px-3.5 py-2.5 text-xs bg-[#09090B] border rounded-lg text-[#FFFFFF] outline-none transition-all placeholder:text-[#A1A1AA]/30 resize-none ${
+                overrideErrors.reason ? 'border-[#EF4444] focus:border-[#EF4444]/50' : 'border-[#27272A] focus:border-amber-500/50'
+              }`}
+            />
+            {overrideErrors.reason && (
+              <p className="text-[10px] text-[#EF4444] mt-1 flex items-center gap-1 font-sans">
+                <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                <span>{overrideErrors.reason}</span>
+              </p>
+            )}
+          </div>
+
+          <div className="flex gap-3 pt-4 border-t border-[#27272A]">
+            <button
+              type="button"
+              onClick={() => setIsOverrideOpen(false)}
+              className="flex-1 py-2.5 border border-[#27272A] hover:bg-[#18181B] text-xs font-semibold text-[#A1A1AA] hover:text-[#FFFFFF] rounded-lg transition-colors cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={submitLoading}
+              className="flex-1 py-2.5 bg-amber-500 hover:bg-amber-600 text-xs font-semibold text-[#09090B] rounded-lg shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+            >
+              {submitLoading ? (
+                <RefreshCw className="w-4 h-4 animate-spin" />
+              ) : (
+                <span>Apply Correction</span>
+              )}
+            </button>
+          </div>
+        </form>
+      </FormModal>
+
+      {/* Override Review Modal — Terminal Personnel accepts/disputes, or Admin views a dispute */}
+      <FormModal
+        isOpen={isReviewOpen}
+        onClose={() => setIsReviewOpen(false)}
+        title={selectedSchedule ? `Review Correction: ${selectedSchedule.scheduleCode}` : 'Review Correction'}
+        icon={<ShieldAlert className="w-5 h-5 text-amber-500" />}
+      >
+        <div className="space-y-4">
+          {reviewError && (
+            <div className="p-3 bg-[#EF4444]/10 border border-[#EF4444]/20 rounded-lg text-xs text-[#EF4444] flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 shrink-0" />
+              <span className="flex-1 leading-normal font-sans">{reviewError}</span>
+            </div>
+          )}
+
+          <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg text-xs text-amber-400 font-sans">
+            <strong className="block mb-1">Admin's reason for correction:</strong>
+            <span className="leading-relaxed">{selectedSchedule?.overrideReason || '--'}</span>
+            {selectedSchedule?.lastOverriddenBy && (
+              <div className="mt-2 text-[10px] text-[#A1A1AA]">
+                — {selectedSchedule.lastOverriddenBy.fullName || selectedSchedule.lastOverriddenBy.username}
+              </div>
+            )}
+          </div>
+
+          {isAdmin ? (
+            selectedSchedule?.overrideDisputeReason ? (
+              <>
+                <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-xs text-red-400 font-sans">
+                  <strong className="block mb-1">Terminal Personnel's dispute:</strong>
+                  <span className="leading-relaxed">{selectedSchedule.overrideDisputeReason}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => { setIsReviewOpen(false); openOverrideModal(selectedSchedule); }}
+                  className="w-full py-2.5 bg-amber-500 hover:bg-amber-600 text-xs font-semibold text-[#09090B] rounded-lg shadow-md transition-all cursor-pointer"
+                >
+                  Submit Revised Correction
+                </button>
+              </>
+            ) : (
+              <p className="text-xs text-[#A1A1AA] font-sans">Waiting for Terminal Personnel to review this correction. No action needed from you right now.</p>
+            )
+          ) : (
+            <>
+              {!disputeMode ? (
+                <div className="flex gap-3">
+                  <button
+                    type="button"
+                    onClick={handleAcknowledgeOverride}
+                    disabled={submitLoading}
+                    className="flex-1 py-2.5 bg-emerald-500/10 border border-emerald-500/20 hover:bg-emerald-500/20 text-xs font-semibold text-emerald-400 rounded-lg transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                  >
+                    <ThumbsUp className="w-4 h-4" />
+                    <span>Accept Correction</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDisputeMode(true)}
+                    className="flex-1 py-2.5 bg-red-500/10 border border-red-500/20 hover:bg-red-500/20 text-xs font-semibold text-red-400 rounded-lg transition-all flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    <ThumbsDown className="w-4 h-4" />
+                    <span>Dispute</span>
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-mono text-[#A1A1AA] uppercase block">Reason for Dispute</label>
+                    <textarea
+                      value={disputeReason}
+                      onChange={(e) => setDisputeReason(e.target.value)}
+                      rows={3}
+                      placeholder="e.g. The original entry was actually correct — please re-verify with me before overriding."
+                      className="w-full px-3.5 py-2.5 text-xs bg-[#09090B] border border-[#27272A] rounded-lg text-[#FFFFFF] outline-none focus:border-red-500/50 transition-all placeholder:text-[#A1A1AA]/30 resize-none"
+                    />
+                  </div>
+                  <div className="flex gap-3">
+                    <button
+                      type="button"
+                      onClick={() => { setDisputeMode(false); setDisputeReason(''); setReviewError(null); }}
+                      className="flex-1 py-2.5 border border-[#27272A] hover:bg-[#18181B] text-xs font-semibold text-[#A1A1AA] hover:text-[#FFFFFF] rounded-lg transition-colors cursor-pointer"
+                    >
+                      Back
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleDisputeOverride}
+                      disabled={submitLoading}
+                      className="flex-1 py-2.5 bg-red-500 hover:bg-red-600 text-xs font-semibold text-white rounded-lg shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                    >
+                      {submitLoading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <span>Submit Dispute</span>}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </div>
       </FormModal>
 
       {/* Delete Confirmation Modal */}

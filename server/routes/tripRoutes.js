@@ -10,7 +10,10 @@ import {
   getPendingArrivalsCount,
   getMyPendingNotificationsCount,
   acknowledgeNotifications,
-  deleteTrip
+  deleteTrip,
+  overrideTrip,
+  acknowledgeTripOverride,
+  disputeTripOverride
 } from '../controllers/tripController.js';
 
 import { protect } from '../middleware/authMiddleware.js';
@@ -22,7 +25,7 @@ const router = express.Router();
 
 router.route('/')
   .get(protect, getTrips)
-  .post(protect, authorize('Admin', 'Terminal Personnel'), createTrip);
+  .post(protect, authorize('Terminal Personnel'), createTrip);
 
 
 // Literal-path routes must come before '/:id' so Express doesn't treat
@@ -63,11 +66,32 @@ router.patch(
   confirmArrival
 );
 
+router.patch(
+  '/:id/override',
+  protect,
+  authorize('Admin'),
+  overrideTrip
+);
+
+router.patch(
+  '/:id/acknowledge-override',
+  protect,
+  authorize('Terminal Personnel'),
+  acknowledgeTripOverride
+);
+
+router.patch(
+  '/:id/dispute-override',
+  protect,
+  authorize('Terminal Personnel'),
+  disputeTripOverride
+);
+
 
 router.route('/:id')
   .get(protect, getTripById)
-  .put(protect, authorize('Admin', 'Terminal Personnel'), updateTrip)
-  .delete(protect, authorize('Admin', 'Terminal Personnel'), deleteTrip);
+  .put(protect, authorize('Terminal Personnel'), updateTrip)
+  .delete(protect, authorize('Terminal Personnel'), deleteTrip);
 
 
 export default router;

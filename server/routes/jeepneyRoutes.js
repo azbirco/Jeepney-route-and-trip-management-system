@@ -15,7 +15,6 @@ import { authorize } from '../middleware/roleMiddleware.js';
 const router = express.Router();
 
 
-
 router.route('/')
 
   .get(
@@ -23,18 +22,11 @@ router.route('/')
     getJeepneys
   )
 
-
   .post(
     protect,
-    authorize(
-      'Admin',
-      'Terminal Personnel'
-    ),
+    authorize('Admin'),
     createJeepney
   );
-
-
-
 
 
 router.route('/:id')
@@ -44,26 +36,17 @@ router.route('/:id')
     getJeepneyById
   )
 
-
   .put(
     protect,
-    authorize(
-      'Admin',
-      'Terminal Personnel'
-    ),
+    authorize('Admin'),
     updateJeepney
   )
 
-
   .delete(
     protect,
-    authorize(
-      'Admin',
-      'Terminal Personnel'
-    ),
+    authorize('Admin'),
     deleteJeepney
   );
-
 
 
 export default router;

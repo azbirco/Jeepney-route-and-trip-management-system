@@ -15,57 +15,38 @@ import { authorize } from '../middleware/roleMiddleware.js';
 const router = express.Router();
 
 
-
 router.route('/')
-
 
 .get(
   protect,
   getRoutes
 )
 
-
 .post(
   protect,
-  authorize(
-    'Admin',
-    'Terminal Personnel'
-  ),
+  authorize('Admin'),
   createRoute
 );
 
 
-
-
-
 router.route('/:id')
-
 
 .get(
   protect,
   getRouteById
 )
 
-
 .put(
   protect,
-  authorize(
-    'Admin',
-    'Terminal Personnel'
-  ),
+  authorize('Admin'),
   updateRoute
 )
 
-
 .delete(
   protect,
-  authorize(
-    'Admin',
-    'Terminal Personnel'
-  ),
+  authorize('Admin'),
   deleteRoute
 );
-
 
 
 export default router;

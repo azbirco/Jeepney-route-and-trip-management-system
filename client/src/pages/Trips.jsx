@@ -33,8 +33,10 @@ const Trips = () => {
 
   const [trips, setTrips] = useState([]);
   const [jeepneys, setJeepneys] = useState([]);
-  const [routes, setRoutes] = useState([]);
-  const [schedules, setSchedules] = useState([]);
+  const [routes, setRoutes] = useState([]); // Active-only routes (for new/normal selection)
+  const [allRoutes, setAllRoutes] = useState([]); // Unfiltered, used to resolve locked/inactive routes
+  const [schedules, setSchedules] = useState([]); // Active-only schedules
+  const [allSchedules, setAllSchedules] = useState([]); // Unfiltered, used to resolve locked/inactive schedules
   const [drivers, setDrivers] = useState([]);
 
   const [loading, setLoading] = useState(true);
@@ -43,8 +45,8 @@ const Trips = () => {
 
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
-  const [sortBy, setSortBy] = useState('departureDate');
-  const [sortOrder, setSortOrder] = useState('desc');
+const [sortBy, setSortBy] = useState('tripCode');
+const [sortOrder, setSortOrder] = useState('asc');
 
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
@@ -105,11 +107,15 @@ const Trips = () => {
       if (jeepneysRes.data.success) setJeepneys(jeepneysRes.data.data);
 
       if (routesRes.data.success) {
-        setRoutes(routesRes.data.data.filter(r => r.status === 'Active' || !r.status));
+        const allFetchedRoutes = routesRes.data.data;
+        setAllRoutes(allFetchedRoutes);
+        setRoutes(allFetchedRoutes.filter(r => r.status === 'Active' || !r.status));
       }
 
       if (schedulesRes.data.success) {
-        setSchedules(schedulesRes.data.data.filter(s => s.status === 'Active' || !s.status));
+        const allFetchedSchedules = schedulesRes.data.data;
+        setAllSchedules(allFetchedSchedules);
+        setSchedules(allFetchedSchedules.filter(s => s.status === 'Active' || !s.status));
       }
 
       if (driversRes.data.success) setDrivers(driversRes.data.data);
@@ -130,6 +136,30 @@ const Trips = () => {
   const triggerSuccess = (msg) => {
     setSuccessMsg(msg);
     setTimeout(() => setSuccessMsg(null), 4000);
+  };
+
+  // Builds the route dropdown options. If the currently-assigned route has
+  // gone Inactive since the trip was created, it's appended (rendered
+  // disabled) so the true value stays visible instead of showing blank —
+  // it can't be reselected once changed, and no other Inactive route
+  // becomes selectable.
+  const getRouteOptions = (currentRouteId) => {
+    const isCurrentActive = routes.some((r) => r._id === currentRouteId);
+    if (!currentRouteId || isCurrentActive) return routes;
+
+    const inactiveRoute = allRoutes.find((r) => r._id === currentRouteId);
+    return inactiveRoute ? [...routes, inactiveRoute] : routes;
+  };
+
+  // Same locking behavior for the schedule dropdown, scoped to the
+  // currently-selected route.
+  const getScheduleOptions = (routeId, currentScheduleId) => {
+    const routeSchedules = schedules.filter((s) => s.route && s.route._id === routeId);
+    const isCurrentActive = routeSchedules.some((s) => s._id === currentScheduleId);
+    if (!currentScheduleId || isCurrentActive) return routeSchedules;
+
+    const inactiveSchedule = allSchedules.find((s) => s._id === currentScheduleId);
+    return inactiveSchedule ? [...routeSchedules, inactiveSchedule] : routeSchedules;
   };
 
   const handleRouteSelectChange = (e) => {
@@ -380,7 +410,15 @@ const Trips = () => {
 
   const pendingArrivals = trips.filter(t => t.arrivalReported && t.status !== 'Arrived');
 
-  const currentFormRouteSchedules = schedules.filter(s => s.route && s.route._id === formData.route);
+  // Options for the currently open form (Add or Edit share formData/route/schedule state)
+  const currentFormRouteOptions = getRouteOptions(formData.route);
+  const currentFormRouteSchedules = getScheduleOptions(formData.route, formData.schedule);
+  const isFormRouteInactive = currentFormRouteOptions.some(
+    (rt) => rt._id === formData.route && rt.status === 'Inactive'
+  );
+  const isFormScheduleInactive = currentFormRouteSchedules.some(
+    (sc) => sc._id === formData.schedule && sc.status === 'Inactive'
+  );
 
   const filteredTrips = trips
     .filter((trip) => {
@@ -746,9 +784,10 @@ const Trips = () => {
               }`}
             >
               <option value="">Select Route</option>
-              {routes.map((rt) => (
-                <option key={rt._id} value={rt._id}>
+              {currentFormRouteOptions.map((rt) => (
+                <option key={rt._id} value={rt._id} disabled={rt.status === 'Inactive'}>
                   {rt.routeCode}: {rt.origin} to {rt.destination} (₱{rt.estimatedFare})
+                  {rt.status === 'Inactive' ? ' — Inactive (Locked)' : ''}
                 </option>
               ))}
             </select>
@@ -773,8 +812,9 @@ const Trips = () => {
             >
               <option value="">Select Departure Time</option>
               {currentFormRouteSchedules.map((sc) => (
-                <option key={sc._id} value={sc._id}>
+                <option key={sc._id} value={sc._id} disabled={sc.status === 'Inactive'}>
                   {sc.scheduleCode}: {sc.departureTime} (Expected Arr: {sc.expectedArrivalTime || '--:--'})
+                  {sc.status === 'Inactive' ? ' — Inactive (Locked)' : ''}
                 </option>
               ))}
             </select>
@@ -977,9 +1017,10 @@ const Trips = () => {
               }`}
             >
               <option value="">Select Route</option>
-              {routes.map((rt) => (
-                <option key={rt._id} value={rt._id}>
+              {currentFormRouteOptions.map((rt) => (
+                <option key={rt._id} value={rt._id} disabled={rt.status === 'Inactive'}>
                   {rt.routeCode}: {rt.origin} to {rt.destination} (₱{rt.estimatedFare})
+                  {rt.status === 'Inactive' ? ' — Inactive (Locked)' : ''}
                 </option>
               ))}
             </select>
@@ -987,6 +1028,12 @@ const Trips = () => {
               <p className="text-[10px] text-[#EF4444] mt-1 flex items-center gap-1 font-sans">
                 <AlertCircle className="w-3.5 h-3.5 shrink-0" />
                 <span>{formErrors.route}</span>
+              </p>
+            )}
+            {isFormRouteInactive && (
+              <p className="text-[9px] font-mono text-amber-400 mt-1 flex items-center gap-1">
+                <AlertTriangle className="w-3 h-3 shrink-0" />
+                <span>This route has since become Inactive. It's locked here for reference — reassign to an active route if needed.</span>
               </p>
             )}
           </div>
@@ -1004,8 +1051,9 @@ const Trips = () => {
             >
               <option value="">Select Departure Time</option>
               {currentFormRouteSchedules.map((sc) => (
-                <option key={sc._id} value={sc._id}>
+                <option key={sc._id} value={sc._id} disabled={sc.status === 'Inactive'}>
                   {sc.scheduleCode}: {sc.departureTime} (Expected Arr: {sc.expectedArrivalTime || '--:--'})
+                  {sc.status === 'Inactive' ? ' — Inactive (Locked)' : ''}
                 </option>
               ))}
             </select>
@@ -1013,6 +1061,12 @@ const Trips = () => {
               <p className="text-[10px] text-[#EF4444] mt-1 flex items-center gap-1 font-sans">
                 <AlertCircle className="w-3.5 h-3.5 shrink-0" />
                 <span>{formErrors.schedule}</span>
+              </p>
+            )}
+            {isFormScheduleInactive && (
+              <p className="text-[9px] font-mono text-amber-400 mt-1 flex items-center gap-1">
+                <AlertTriangle className="w-3 h-3 shrink-0" />
+                <span>This schedule slot has since become Inactive. It's locked here for reference — reassign to an active slot if needed.</span>
               </p>
             )}
           </div>

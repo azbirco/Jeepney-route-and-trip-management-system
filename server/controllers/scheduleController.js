@@ -89,6 +89,7 @@ export const getSchedules = async (req, res) => {
 
     const schedules = await Schedule.find(query)
       .populate('route')
+      .populate('lastOverriddenBy', 'username fullName')
       .sort({
         departureTime: 1
       });
@@ -116,7 +117,8 @@ export const getScheduleById = async (req, res) => {
   try {
 
     const schedule = await Schedule.findById(req.params.id)
-      .populate('route');
+      .populate('route')
+      .populate('lastOverriddenBy', 'username fullName');
 
     if (!schedule) {
       return res.status(404).json({
@@ -141,7 +143,7 @@ export const getScheduleById = async (req, res) => {
 };
 
 // =========================
-// Update Schedule
+// Update Schedule — Terminal Personnel only (normal operational CRUD)
 // =========================
 export const updateSchedule = async (req, res) => {
 
@@ -209,7 +211,7 @@ export const updateSchedule = async (req, res) => {
 };
 
 // =========================
-// Delete Schedule
+// Delete Schedule — Terminal Personnel only (normal operational CRUD)
 // =========================
 export const deleteSchedule = async (req, res) => {
 
@@ -244,4 +246,206 @@ export const deleteSchedule = async (req, res) => {
     });
 
   }
+};
+
+// =========================
+// Admin Override — Admin only. Corrects a bad Terminal Personnel entry.
+// Applies field changes AND records the correction in one request.
+// A reason is mandatory — this is what distinguishes an override from
+// a normal edit in the audit trail.
+// =========================
+export const overrideSchedule = async (req, res) => {
+
+  try {
+
+    const { reason, ...fields } = req.body;
+
+    if (!reason || !reason.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: 'A reason is required to perform an admin override.'
+      });
+    }
+
+    const existingSchedule = await Schedule.findById(req.params.id);
+
+    if (!existingSchedule) {
+      return res.status(404).json({
+        success: false,
+        message: 'Schedule not found'
+      });
+    }
+
+    const routeId = fields.route || existingSchedule.route;
+    const route = await Route.findById(routeId);
+
+    if (!route) {
+      return res.status(404).json({
+        success: false,
+        message: 'Route not found'
+      });
+    }
+
+    const departureTime = fields.departureTime || existingSchedule.departureTime;
+
+    const updatePayload = {
+      ...fields,
+      expectedArrivalTime: calculateArrivalTime(departureTime, route.estimatedTravelTime),
+      lastOverriddenBy: req.user?._id,
+      overrideReason: reason.trim(),
+      overriddenAt: new Date(),
+      overridePending: true,
+      overrideDisputeReason: ''
+    };
+
+    const schedule = await Schedule.findByIdAndUpdate(
+      req.params.id,
+      updatePayload,
+      { new: true, runValidators: true }
+    )
+      .populate('route')
+      .populate('lastOverriddenBy', 'username fullName');
+
+    await ActivityLog.create({
+      user: req.user?._id,
+      action: 'Admin Override - Schedule',
+      details: `Admin corrected schedule ${schedule.scheduleCode}. Reason: ${reason.trim()}`,
+      ipAddress: req.ip
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'Schedule corrected via admin override.',
+      data: schedule
+    });
+
+  } catch (error) {
+
+    if (error.code === 11000) {
+      return res.status(400).json({
+        success: false,
+        message:
+          'A schedule with this route and departure time already exists.'
+      });
+    }
+
+    res.status(400).json({
+      success: false,
+      message: error.message
+    });
+
+  }
+
+};
+
+// =========================
+// Acknowledge Override — Terminal Personnel only. Closes out a
+// pending override once they've reviewed and accepted the correction.
+// =========================
+export const acknowledgeScheduleOverride = async (req, res) => {
+
+  try {
+
+    const schedule = await Schedule.findById(req.params.id);
+
+    if (!schedule) {
+      return res.status(404).json({
+        success: false,
+        message: 'Schedule not found'
+      });
+    }
+
+    if (!schedule.overridePending) {
+      return res.status(400).json({
+        success: false,
+        message: 'This schedule has no pending override to acknowledge.'
+      });
+    }
+
+    schedule.overridePending = false;
+    schedule.overrideDisputeReason = '';
+    await schedule.save();
+
+    await ActivityLog.create({
+      user: req.user?._id,
+      action: 'Override Acknowledged - Schedule',
+      details: `Terminal Personnel acknowledged admin override on schedule ${schedule.scheduleCode}`,
+      ipAddress: req.ip
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'Override acknowledged.',
+      data: schedule
+    });
+
+  } catch (error) {
+
+    res.status(400).json({
+      success: false,
+      message: error.message
+    });
+
+  }
+
+};
+
+// =========================
+// Dispute Override — Terminal Personnel only. Flags an override back
+// to Admin as questionable, with a required explanation.
+// =========================
+export const disputeScheduleOverride = async (req, res) => {
+
+  try {
+
+    const { disputeReason } = req.body;
+
+    if (!disputeReason || !disputeReason.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: 'A reason is required to dispute an admin override.'
+      });
+    }
+
+    const schedule = await Schedule.findById(req.params.id);
+
+    if (!schedule) {
+      return res.status(404).json({
+        success: false,
+        message: 'Schedule not found'
+      });
+    }
+
+    if (!schedule.overridePending) {
+      return res.status(400).json({
+        success: false,
+        message: 'This schedule has no pending override to dispute.'
+      });
+    }
+
+    schedule.overrideDisputeReason = disputeReason.trim();
+    await schedule.save();
+
+    await ActivityLog.create({
+      user: req.user?._id,
+      action: 'Override Disputed - Schedule',
+      details: `Terminal Personnel disputed admin override on schedule ${schedule.scheduleCode}. Dispute reason: ${disputeReason.trim()}`,
+      ipAddress: req.ip
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'Dispute recorded. Admin has been flagged for re-verification.',
+      data: schedule
+    });
+
+  } catch (error) {
+
+    res.status(400).json({
+      success: false,
+      message: error.message
+    });
+
+  }
+
 };

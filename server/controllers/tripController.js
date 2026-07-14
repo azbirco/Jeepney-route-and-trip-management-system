@@ -96,6 +96,7 @@ export const getTrips = async (req, res) => {
       .populate('route')
       .populate('schedule')
       .populate('driver', 'username fullName')
+      .populate('lastOverriddenBy', 'username fullName')
       .sort({ createdAt: -1 });
 
     let filteredTrips = trips;
@@ -135,7 +136,8 @@ export const getTripById = async (req, res) => {
       .populate('jeepney')
       .populate('route')
       .populate('schedule')
-      .populate('driver', 'username fullName');
+      .populate('driver', 'username fullName')
+      .populate('lastOverriddenBy', 'username fullName');
 
     if (!trip) {
       return res.status(404).json({ success: false, message: 'Trip not found' });
@@ -159,7 +161,7 @@ export const getTripById = async (req, res) => {
 
 
 
-// Update Trip — Full edit, Admin & Terminal Personnel only.
+// Update Trip — Terminal Personnel only (normal operational CRUD).
 export const updateTrip = async (req, res) => {
 
   try {
@@ -491,7 +493,7 @@ export const acknowledgeNotifications = async (req, res) => {
 
 
 
-// Delete Trip
+// Delete Trip — Terminal Personnel only (normal operational CRUD).
 export const deleteTrip = async (req, res) => {
   try {
     const trip = await Trip.findByIdAndDelete(req.params.id);
@@ -517,4 +519,197 @@ export const deleteTrip = async (req, res) => {
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
+};
+
+
+
+
+// =========================
+// Admin Override — Admin only. Corrects a bad Terminal Personnel entry.
+// Applies field changes AND records the correction in one request.
+// A reason is mandatory. Status may only be set to Scheduled or
+// Cancelled here — Departed/Arrived remain exclusively Driver-reported,
+// since only the Driver is physically present to know those actually
+// happened.
+// =========================
+export const overrideTrip = async (req, res) => {
+
+  try {
+
+    const { reason, ...fields } = req.body;
+
+    if (!reason || !reason.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: 'A reason is required to perform an admin override.'
+      });
+    }
+
+    if (fields.status && !['Scheduled', 'Cancelled'].includes(fields.status)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Admin override may only set status to Scheduled or Cancelled. Departed/Arrived can only be reported by the assigned Driver.'
+      });
+    }
+
+    const existingTrip = await Trip.findById(req.params.id);
+
+    if (!existingTrip) {
+      return res.status(404).json({ success: false, message: 'Trip not found' });
+    }
+
+    const oldDriverId = existingTrip.driver ? existingTrip.driver.toString() : null;
+    const newDriverId = 'driver' in fields ? (fields.driver || null) : oldDriverId;
+    const driverChanged = oldDriverId !== newDriverId;
+
+    const willBeCancelled =
+      fields.status === 'Cancelled' &&
+      existingTrip.status !== 'Cancelled';
+
+    const updatePayload = { ...fields };
+
+    if (
+      (driverChanged && newDriverId) ||
+      (willBeCancelled && (newDriverId || oldDriverId))
+    ) {
+      updatePayload.driverNotified = false;
+    }
+
+    updatePayload.lastOverriddenBy = req.user?._id;
+    updatePayload.overrideReason = reason.trim();
+    updatePayload.overriddenAt = new Date();
+    updatePayload.overridePending = true;
+    updatePayload.overrideDisputeReason = '';
+
+    const trip = await Trip.findByIdAndUpdate(
+      req.params.id,
+      updatePayload,
+      { new: true, runValidators: true }
+    )
+      .populate('jeepney')
+      .populate('route')
+      .populate('schedule')
+      .populate('driver', 'username fullName')
+      .populate('lastOverriddenBy', 'username fullName');
+
+    if (trip.route && typeof trip.passengerCount === 'number') {
+      trip.estimatedRevenue = trip.passengerCount * trip.route.estimatedFare;
+      await trip.save();
+    }
+
+    await passengerStatisticService.createPassengerStatistic(trip._id, trip.passengerCount || 0);
+
+    await ActivityLog.create({
+      user: req.user?._id,
+      action: 'Admin Override - Trip',
+      details: `Admin corrected trip ${trip.tripCode}. Reason: ${reason.trim()}`,
+      ipAddress: req.ip
+    });
+
+    notifyAdmin();
+
+    res.status(200).json({
+      success: true,
+      message: 'Trip corrected via admin override.',
+      data: trip
+    });
+
+  } catch (error) {
+    res.status(400).json({ success: false, message: error.message });
+  }
+
+};
+
+// =========================
+// Acknowledge Override — Terminal Personnel only.
+// =========================
+export const acknowledgeTripOverride = async (req, res) => {
+
+  try {
+
+    const trip = await Trip.findById(req.params.id);
+
+    if (!trip) {
+      return res.status(404).json({ success: false, message: 'Trip not found' });
+    }
+
+    if (!trip.overridePending) {
+      return res.status(400).json({
+        success: false,
+        message: 'This trip has no pending override to acknowledge.'
+      });
+    }
+
+    trip.overridePending = false;
+    trip.overrideDisputeReason = '';
+    await trip.save();
+
+    await ActivityLog.create({
+      user: req.user?._id,
+      action: 'Override Acknowledged - Trip',
+      details: `Terminal Personnel acknowledged admin override on trip ${trip.tripCode}`,
+      ipAddress: req.ip
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'Override acknowledged.',
+      data: trip
+    });
+
+  } catch (error) {
+    res.status(400).json({ success: false, message: error.message });
+  }
+
+};
+
+// =========================
+// Dispute Override — Terminal Personnel only.
+// =========================
+export const disputeTripOverride = async (req, res) => {
+
+  try {
+
+    const { disputeReason } = req.body;
+
+    if (!disputeReason || !disputeReason.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: 'A reason is required to dispute an admin override.'
+      });
+    }
+
+    const trip = await Trip.findById(req.params.id);
+
+    if (!trip) {
+      return res.status(404).json({ success: false, message: 'Trip not found' });
+    }
+
+    if (!trip.overridePending) {
+      return res.status(400).json({
+        success: false,
+        message: 'This trip has no pending override to dispute.'
+      });
+    }
+
+    trip.overrideDisputeReason = disputeReason.trim();
+    await trip.save();
+
+    await ActivityLog.create({
+      user: req.user?._id,
+      action: 'Override Disputed - Trip',
+      details: `Terminal Personnel disputed admin override on trip ${trip.tripCode}. Dispute reason: ${disputeReason.trim()}`,
+      ipAddress: req.ip
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'Dispute recorded. Admin has been flagged for re-verification.',
+      data: trip
+    });
+
+  } catch (error) {
+    res.status(400).json({ success: false, message: error.message });
+  }
+
 };
