@@ -1,16 +1,56 @@
-import Report from '../models/Report.js';
 import Trip from '../models/Trip.js';
 import Route from '../models/Route.js';
 import Jeepney from '../models/Jeepney.js';
 import PassengerStatistic from '../models/PassengerStatistic.js';
 import ActivityLog from '../models/ActivityLog.js';
+import Report from '../models/Report.js';
 
 
-const getDateRange = (startDateStr, endDateStr) => {
-  const start = startDateStr ? new Date(startDateStr) : new Date();
-  const end = endDateStr ? new Date(endDateStr) : new Date();
+// Computes { start, end } based on a named period (all/today/week/month/year/custom).
+// week/month/year mean "from the start of that period up to today" (running totals),
+// not a fixed calendar window. 'custom' falls back to explicit startDate/endDate,
+// defaulting to today if neither is supplied (matches original default behavior).
+const getDateRange = (period, startDateStr, endDateStr) => {
+  const now = new Date();
+  let start;
+  let end = new Date(now);
+
+  switch (period) {
+    case 'all':
+      start = new Date(0);
+      end = new Date(8640000000000000); // max valid JS date
+      break;
+
+    case 'week': {
+      start = new Date(now);
+      const day = start.getDay(); // 0 = Sun ... 6 = Sat
+      const diffToMonday = day === 0 ? 6 : day - 1;
+      start.setDate(start.getDate() - diffToMonday);
+      break;
+    }
+
+    case 'month':
+      start = new Date(now.getFullYear(), now.getMonth(), 1);
+      break;
+
+    case 'year':
+      start = new Date(now.getFullYear(), 0, 1);
+      break;
+
+    case 'custom':
+      start = startDateStr ? new Date(startDateStr) : new Date(now);
+      end = endDateStr ? new Date(endDateStr) : new Date(now);
+      break;
+
+    case 'today':
+    default:
+      start = new Date(now);
+      break;
+  }
+
   start.setHours(0, 0, 0, 0);
   end.setHours(23, 59, 59, 999);
+
   return { start, end };
 };
 
@@ -45,10 +85,13 @@ const maybeSaveReport = async ({ req, reportType, start, end, summaryData }) => 
 // @route   GET /api/reports/daily-trips
 export const getDailyTripReport = async (req, res) => {
   try {
-    const { startDate, endDate } = req.query;
-    const { start, end } = getDateRange(startDate, endDate);
+    const { period, startDate, endDate } = req.query;
+    const { start, end } = getDateRange(period, startDate, endDate);
 
+    // Sorted newest-first so "Recent Trips" on the frontend is actually recent
+    // before it gets sliced to the top 20.
     const trips = await Trip.find({ departureDate: { $gte: start, $lte: end } })
+      .sort({ departureDate: -1 })
       .populate('jeepney')
       .populate('route')
       .populate('schedule');
@@ -76,6 +119,8 @@ export const getDailyTripReport = async (req, res) => {
     res.status(200).json({
       success: true,
       reportId: report?._id || null,
+      dateFrom: start,
+      dateTo: end,
       data: summaryData,
       trips
     });
@@ -89,8 +134,8 @@ export const getDailyTripReport = async (req, res) => {
 // @route   GET /api/reports/passengers
 export const getPassengerSummaryReport = async (req, res) => {
   try {
-    const { startDate, endDate } = req.query;
-    const { start, end } = getDateRange(startDate, endDate);
+    const { period, startDate, endDate } = req.query;
+    const { start, end } = getDateRange(period, startDate, endDate);
 
     const completedTrips = await Trip.find({
       departureDate: { $gte: start, $lte: end },
@@ -100,6 +145,9 @@ export const getPassengerSummaryReport = async (req, res) => {
     const stats = await PassengerStatistic.find({
       trip: { $in: completedTrips.map((trip) => trip._id) }
     }).populate({ path: 'trip', populate: ['route', 'schedule', 'jeepney'] });
+
+    // Newest trip date first, for the same "Recent" reasoning as Daily Trip Report.
+    stats.sort((a, b) => new Date(b.trip?.departureDate || 0) - new Date(a.trip?.departureDate || 0));
 
     let totalPassengers = 0;
     let peakPassengerCount = 0;
@@ -131,6 +179,8 @@ export const getPassengerSummaryReport = async (req, res) => {
     res.status(200).json({
       success: true,
       reportId: report?._id || null,
+      dateFrom: start,
+      dateTo: end,
       data: summaryData,
       details: stats
     });
@@ -144,8 +194,8 @@ export const getPassengerSummaryReport = async (req, res) => {
 // @route   GET /api/reports/routes
 export const getRouteSummaryReport = async (req, res) => {
   try {
-    const { startDate, endDate } = req.query;
-    const { start, end } = getDateRange(startDate, endDate);
+    const { period, startDate, endDate } = req.query;
+    const { start, end } = getDateRange(period, startDate, endDate);
 
     const routes = await Route.find({});
     const routeSummary = [];
@@ -172,7 +222,13 @@ export const getRouteSummaryReport = async (req, res) => {
       req, reportType: 'Route Summary Report', start, end, summaryData
     });
 
-    res.status(200).json({ success: true, reportId: report?._id || null, data: summaryData });
+    res.status(200).json({
+      success: true,
+      reportId: report?._id || null,
+      dateFrom: start,
+      dateTo: end,
+      data: summaryData
+    });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Error generating Route Summary Report', error: error.message });
   }
@@ -183,8 +239,8 @@ export const getRouteSummaryReport = async (req, res) => {
 // @route   GET /api/reports/jeepneys
 export const getJeepneyActivityReport = async (req, res) => {
   try {
-    const { startDate, endDate } = req.query;
-    const { start, end } = getDateRange(startDate, endDate);
+    const { period, startDate, endDate } = req.query;
+    const { start, end } = getDateRange(period, startDate, endDate);
 
     const jeepneys = await Jeepney.find({});
     const jeepneySummary = [];
@@ -213,7 +269,13 @@ export const getJeepneyActivityReport = async (req, res) => {
       req, reportType: 'Jeepney Activity Report', start, end, summaryData
     });
 
-    res.status(200).json({ success: true, reportId: report?._id || null, data: summaryData });
+    res.status(200).json({
+      success: true,
+      reportId: report?._id || null,
+      dateFrom: start,
+      dateTo: end,
+      data: summaryData
+    });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Error generating Jeepney Activity Report', error: error.message });
   }
@@ -224,8 +286,8 @@ export const getJeepneyActivityReport = async (req, res) => {
 // @route   GET /api/reports/revenue
 export const getRevenueSummaryReport = async (req, res) => {
   try {
-    const { startDate, endDate } = req.query;
-    const { start, end } = getDateRange(startDate, endDate);
+    const { period, startDate, endDate } = req.query;
+    const { start, end } = getDateRange(period, startDate, endDate);
 
     const trips = await Trip.find({
       departureDate: { $gte: start, $lte: end },
@@ -238,7 +300,8 @@ export const getRevenueSummaryReport = async (req, res) => {
     trips.forEach((trip) => {
       if (!trip.route) return;
       const key = `${trip.route.origin}-${trip.route.destination}`;
-      const amount = (trip.passengerCount || 0) * (trip.route.estimatedFare || 0);
+      const passengerCount = trip.passengerCount || 0;
+      const amount = passengerCount * (trip.route.estimatedFare || 0);
       revenue += amount;
 
       if (!revenueByRoute[key]) {
@@ -246,9 +309,13 @@ export const getRevenueSummaryReport = async (req, res) => {
           routeId: trip.route._id,
           origin: trip.route.origin,
           destination: trip.route.destination,
+          tripsCount: 0,
+          passengersCount: 0,
           revenue: 0
         };
       }
+      revenueByRoute[key].tripsCount += 1;
+      revenueByRoute[key].passengersCount += passengerCount;
       revenueByRoute[key].revenue += amount;
     });
 
@@ -262,7 +329,13 @@ export const getRevenueSummaryReport = async (req, res) => {
       req, reportType: 'Revenue Summary Report', start, end, summaryData
     });
 
-    res.status(200).json({ success: true, reportId: report?._id || null, data: summaryData });
+    res.status(200).json({
+      success: true,
+      reportId: report?._id || null,
+      dateFrom: start,
+      dateTo: end,
+      data: summaryData
+    });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Error generating Revenue Summary Report', error: error.message });
   }

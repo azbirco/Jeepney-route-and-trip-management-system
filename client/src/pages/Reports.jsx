@@ -4,6 +4,7 @@ import api from "../services/api";
 import {
   FileBarChart2,
   RefreshCw,
+  RotateCcw,
   Calendar,
   Users,
   Bus,
@@ -30,12 +31,22 @@ import {
 } from "recharts";
 
 const reports = [
-  { id: "jeepneys", name: "Jeepney Activity", icon: <Bus /> },
-  { id: "routes", name: "Route Summary", icon: <Route /> },
-  { id: "daily-trips", name: "Daily Trip Report", icon: <Activity /> },
-  { id: "passengers", name: "Passenger Summary", icon: <Users /> },
-  { id: "revenue", name: "Revenue Summary", icon: <PhilippinePeso /> }
+  { id: "jeepneys", name: "Jeepney Activity", icon: <Bus size={16} /> },
+  { id: "routes", name: "Route Summary", icon: <Route size={16} /> },
+  { id: "daily-trips", name: "Daily Trip Report", icon: <Activity size={16} /> },
+  { id: "passengers", name: "Passenger Summary", icon: <Users size={16} /> },
+  { id: "revenue", name: "Revenue Summary", icon: <PhilippinePeso size={16} /> }
 ];
+
+const PRESETS = [
+  { id: "all", label: "All" },
+  { id: "today", label: "Today" },
+  { id: "week", label: "This Week" },
+  { id: "month", label: "This Month" },
+  { id: "year", label: "This Year" }
+];
+
+const PRESET_LABELS = PRESETS.reduce((acc, p) => ({ ...acc, [p.id]: p.label }), { custom: "Custom Range" });
 
 const COLORS = ["#F97316", "#34D399", "#38BDF8", "#A78BFA", "#F472B6", "#FBBF24", "#71717A"];
 
@@ -47,23 +58,42 @@ const tooltipStyle = {
   color: "#FFFFFF"
 };
 
+const formatDate = (dateStr) => {
+  if (!dateStr) return "N/A";
+  return new Date(dateStr).toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" });
+};
+
 const Reports = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [reportData, setReportData] = useState(null); // full API response
   const [selectedReportId, setSelectedReportId] = useState(reports[0].id);
   const [selectedReportName, setSelectedReportName] = useState(reports[0].name);
-  const [startDate, setStartDate] = useState("");
-  const [endDate, setEndDate] = useState("");
 
-  const fetchReport = async (reportId, reportName) => {
+  const [period, setPeriod] = useState("today");
+  const [customStart, setCustomStart] = useState("");
+  const [customEnd, setCustomEnd] = useState("");
+
+  const fetchReport = async (
+    reportId,
+    reportName,
+    { silent = false, periodOverride, startOverride, endOverride } = {}
+  ) => {
     try {
-      setLoading(true);
-      setError(null);
+      if (!silent) {
+        setLoading(true);
+        setError(null);
+      }
 
-      const params = {};
-      if (startDate) params.startDate = startDate;
-      if (endDate) params.endDate = endDate;
+      const activePeriod = periodOverride ?? period;
+      const activeStart = startOverride ?? customStart;
+      const activeEnd = endOverride ?? customEnd;
+
+      const params = { period: activePeriod };
+      if (activePeriod === "custom") {
+        if (activeStart) params.startDate = activeStart;
+        if (activeEnd) params.endDate = activeEnd;
+      }
 
       const response = await api.get(`/reports/${reportId}`, { params });
 
@@ -71,10 +101,12 @@ const Reports = () => {
       setSelectedReportId(reportId);
       setSelectedReportName(reportName);
     } catch (err) {
-      setError(err.response?.data?.message || "Failed to generate report");
-      setReportData(null);
+      if (!silent) {
+        setError(err.response?.data?.message || "Failed to generate report");
+        setReportData(null);
+      }
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
@@ -84,8 +116,54 @@ const Reports = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Silent 30-second background refresh of whatever is currently being viewed
+  useEffect(() => {
+    const interval = setInterval(() => {
+      fetchReport(selectedReportId, selectedReportName, { silent: true });
+    }, 30000);
+    return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedReportId, selectedReportName, period, customStart, customEnd]);
+
+  const handleSelectReport = (reportId, reportName) => {
+    if (reportId === selectedReportId) return; // already viewing this one
+    fetchReport(reportId, reportName);
+  };
+
+  const handlePresetClick = (presetId) => {
+    setPeriod(presetId);
+    setCustomStart("");
+    setCustomEnd("");
+    fetchReport(selectedReportId, selectedReportName, {
+      periodOverride: presetId,
+      startOverride: "",
+      endOverride: ""
+    });
+  };
+
+  const handleCustomStartChange = (e) => {
+    setCustomStart(e.target.value);
+    setPeriod("custom");
+  };
+
+  const handleCustomEndChange = (e) => {
+    setCustomEnd(e.target.value);
+    setPeriod("custom");
+  };
+
   const handleApplyFilter = () => {
     fetchReport(selectedReportId, selectedReportName);
+  };
+
+  const handleReset = () => {
+    setPeriod("today");
+    setCustomStart("");
+    setCustomEnd("");
+    fetchReport(selectedReportId, selectedReportName, {
+      periodOverride: "today",
+      startOverride: "",
+      endOverride: ""
+    });
   };
 
   return (
@@ -107,49 +185,75 @@ const Reports = () => {
             <h2 className="font-semibold text-lg">Report Period</h2>
           </div>
 
-          <button
-            onClick={handleApplyFilter}
-            disabled={loading}
-            className="flex items-center gap-2 bg-orange-500 hover:bg-orange-600 disabled:opacity-50 text-white text-sm font-semibold px-4 py-2 rounded-xl transition"
-          >
-            <RefreshCw className={loading ? "animate-spin" : ""} size={14} />
-            Apply
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleReset}
+              disabled={loading}
+              className="flex items-center gap-2 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 text-zinc-300 text-sm font-semibold px-4 py-2 rounded-xl transition"
+            >
+              <RotateCcw size={14} />
+              Reset
+            </button>
+            <button
+              onClick={handleApplyFilter}
+              disabled={loading}
+              className="flex items-center gap-2 bg-orange-500 hover:bg-orange-600 disabled:opacity-50 text-white text-sm font-semibold px-4 py-2 rounded-xl transition"
+            >
+              <RefreshCw className={loading ? "animate-spin" : ""} size={14} />
+              Apply
+            </button>
+          </div>
         </div>
 
+        {/* Preset buttons */}
+        <div className="flex flex-wrap gap-2 mb-4">
+          {PRESETS.map((preset) => (
+            <button
+              key={preset.id}
+              onClick={() => handlePresetClick(preset.id)}
+              className={`px-4 py-2 rounded-xl text-sm font-semibold border transition ${
+                period === preset.id
+                  ? "bg-orange-500 border-orange-500 text-white"
+                  : "bg-zinc-800 border-zinc-700 text-zinc-300 hover:border-orange-500/50"
+              }`}
+            >
+              {preset.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Custom range */}
         <div className="grid md:grid-cols-2 gap-4">
           <input
             type="date"
-            value={startDate}
-            onChange={(e) => setStartDate(e.target.value)}
+            value={customStart}
+            onChange={handleCustomStartChange}
             className="bg-zinc-800 border border-zinc-700 rounded-xl p-3 text-white"
           />
           <input
             type="date"
-            value={endDate}
-            onChange={(e) => setEndDate(e.target.value)}
+            value={customEnd}
+            onChange={handleCustomEndChange}
             className="bg-zinc-800 border border-zinc-700 rounded-xl p-3 text-white"
           />
         </div>
       </motion.div>
 
       {/* REPORT TYPE TABS */}
-      <div className="grid md:grid-cols-2 xl:grid-cols-5 gap-5">
+      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-2 flex flex-wrap gap-2">
         {reports.map((report) => (
-          <motion.button
+          <button
             key={report.id}
-            whileHover={{ y: -5 }}
-            onClick={() => fetchReport(report.id, report.name)}
-            className={`bg-zinc-900 border rounded-2xl p-5 text-left hover:border-orange-500 transition ${
-              selectedReportId === report.id ? "border-orange-500" : "border-zinc-800"
+            onClick={() => handleSelectReport(report.id, report.name)}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition ${
+              selectedReportId === report.id
+                ? "bg-orange-500 text-white"
+                : "text-zinc-400 hover:bg-zinc-800 hover:text-white"
             }`}
           >
-            <div className="text-orange-500 mb-4">{report.icon}</div>
-            <p className="font-semibold">{report.name}</p>
-            <span className="text-xs text-zinc-500">
-              {selectedReportId === report.id ? "Currently viewing" : "View report"}
-            </span>
-          </motion.button>
+            {report.icon}
+            {report.name}
+          </button>
         ))}
       </div>
 
@@ -161,7 +265,7 @@ const Reports = () => {
         </div>
       )}
 
-      {/* RESULT — always visible, updates in place */}
+      {/* RESULT — directly beneath the tabs, always visible, updates in place */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -169,7 +273,15 @@ const Reports = () => {
       >
         <div className="flex items-center gap-3">
           <FileBarChart2 className="text-orange-500" />
-          <h2 className="text-xl font-bold">{selectedReportName}</h2>
+          <div>
+            <h2 className="text-xl font-bold">{selectedReportName}</h2>
+            <p className="text-xs text-zinc-500">
+              Showing: {PRESET_LABELS[period] || "Custom Range"}
+              {reportData?.dateFrom && period !== "all" && (
+                <> · {formatDate(reportData.dateFrom)} – {formatDate(reportData.dateTo)}</>
+              )}
+            </p>
+          </div>
           {loading && <RefreshCw className="animate-spin text-zinc-500 ml-auto" size={16} />}
         </div>
 
@@ -215,7 +327,7 @@ const JeepneyActivityReport = ({ data }) => {
       name: j.plateNumber,
       Completed: completed,
       Cancelled: cancelled,
-      "In Progress": Math.max(total - completed - cancelled, 0)
+      "Scheduled/Departed": Math.max(total - completed - cancelled, 0)
     };
   });
 
@@ -242,7 +354,7 @@ const JeepneyActivityReport = ({ data }) => {
               <Legend wrapperStyle={{ fontSize: "11px" }} />
               <Bar dataKey="Completed" stackId="a" fill="#34D399" />
               <Bar dataKey="Cancelled" stackId="a" fill="#EF4444" />
-              <Bar dataKey="In Progress" stackId="a" fill="#71717A" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="Scheduled/Departed" stackId="a" fill="#71717A" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         )}
@@ -317,7 +429,7 @@ const RouteSummaryReport = ({ data }) => {
     name: `${r.origin} - ${r.destination}`,
     Completed: r.completedTrips,
     Cancelled: r.cancelledTrips,
-    "In Progress": Math.max(r.totalTrips - r.completedTrips - r.cancelledTrips, 0)
+    "Scheduled/Departed": Math.max(r.totalTrips - r.completedTrips - r.cancelledTrips, 0)
   }));
 
   return (
@@ -342,7 +454,7 @@ const RouteSummaryReport = ({ data }) => {
               <Legend wrapperStyle={{ fontSize: "11px" }} />
               <Bar dataKey="Completed" stackId="a" fill="#34D399" />
               <Bar dataKey="Cancelled" stackId="a" fill="#EF4444" />
-              <Bar dataKey="In Progress" stackId="a" fill="#71717A" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="Scheduled/Departed" stackId="a" fill="#71717A" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         )}
@@ -435,10 +547,11 @@ const DailyTripReport = ({ data, trips }) => {
             <h3 className="text-sm font-semibold text-white">Recent Trips</h3>
           </div>
           <div className="overflow-x-auto max-h-[320px] overflow-y-auto">
-            <table className="w-full text-left min-w-[500px]">
+            <table className="w-full text-left min-w-[560px]">
               <thead>
                 <tr className="text-[10px] uppercase font-mono text-zinc-500 border-b border-zinc-800 sticky top-0 bg-zinc-950">
                   <th className="px-4 py-3">Trip Code</th>
+                  <th className="px-4 py-3">Date</th>
                   <th className="px-4 py-3">Route</th>
                   <th className="px-4 py-3">Status</th>
                   <th className="px-4 py-3">Passengers</th>
@@ -447,7 +560,7 @@ const DailyTripReport = ({ data, trips }) => {
               <tbody>
                 {trips.length === 0 ? (
                   <tr>
-                    <td colSpan={4} className="px-4 py-8 text-center text-zinc-500 text-xs">
+                    <td colSpan={5} className="px-4 py-8 text-center text-zinc-500 text-xs">
                       No trips found.
                     </td>
                   </tr>
@@ -455,6 +568,7 @@ const DailyTripReport = ({ data, trips }) => {
                   trips.slice(0, 20).map((t) => (
                     <tr key={t._id} className="text-xs text-white border-b border-zinc-800 hover:bg-zinc-900/50">
                       <td className="px-4 py-3 font-mono">{t.tripCode}</td>
+                      <td className="px-4 py-3">{formatDate(t.departureDate)}</td>
                       <td className="px-4 py-3">{t.route ? `${t.route.origin} - ${t.route.destination}` : "N/A"}</td>
                       <td className="px-4 py-3">{t.status}</td>
                       <td className="px-4 py-3">{t.passengerCount ?? 0}</td>
@@ -487,10 +601,11 @@ const PassengerSummaryReport = ({ data, details }) => (
         <h3 className="text-sm font-semibold text-white">Passenger Records ({data.recordsCount ?? 0})</h3>
       </div>
       <div className="overflow-x-auto max-h-[400px] overflow-y-auto">
-        <table className="w-full text-left min-w-[600px]">
+        <table className="w-full text-left min-w-[680px]">
           <thead>
             <tr className="text-[10px] uppercase font-mono text-zinc-500 border-b border-zinc-800 sticky top-0 bg-zinc-950">
               <th className="px-5 py-3">Trip Code</th>
+              <th className="px-5 py-3">Date</th>
               <th className="px-5 py-3">Route</th>
               <th className="px-5 py-3">Jeepney</th>
               <th className="px-5 py-3">Passengers</th>
@@ -500,7 +615,7 @@ const PassengerSummaryReport = ({ data, details }) => (
           <tbody>
             {details.length === 0 ? (
               <tr>
-                <td colSpan={5} className="px-5 py-8 text-center text-zinc-500 text-xs">
+                <td colSpan={6} className="px-5 py-8 text-center text-zinc-500 text-xs">
                   No passenger records found.
                 </td>
               </tr>
@@ -508,6 +623,7 @@ const PassengerSummaryReport = ({ data, details }) => (
               details.map((d) => (
                 <tr key={d._id} className="text-xs text-white border-b border-zinc-800 hover:bg-zinc-900/50">
                   <td className="px-5 py-3 font-mono">{d.trip?.tripCode ?? "N/A"}</td>
+                  <td className="px-5 py-3">{formatDate(d.trip?.departureDate)}</td>
                   <td className="px-5 py-3">
                     {d.trip?.route ? `${d.trip.route.origin} - ${d.trip.route.destination}` : "N/A"}
                   </td>
@@ -567,17 +683,19 @@ const RevenueSummaryReport = ({ data }) => {
             <h3 className="text-sm font-semibold text-white">Revenue Breakdown</h3>
           </div>
           <div className="overflow-x-auto max-h-[320px] overflow-y-auto">
-            <table className="w-full text-left min-w-[400px]">
+            <table className="w-full text-left min-w-[520px]">
               <thead>
                 <tr className="text-[10px] uppercase font-mono text-zinc-500 border-b border-zinc-800 sticky top-0 bg-zinc-950">
                   <th className="px-5 py-3">Route</th>
+                  <th className="px-5 py-3">Trips</th>
+                  <th className="px-5 py-3">Passengers</th>
                   <th className="px-5 py-3">Revenue</th>
                 </tr>
               </thead>
               <tbody>
                 {byRoute.length === 0 ? (
                   <tr>
-                    <td colSpan={2} className="px-5 py-8 text-center text-zinc-500 text-xs">
+                    <td colSpan={4} className="px-5 py-8 text-center text-zinc-500 text-xs">
                       No data.
                     </td>
                   </tr>
@@ -587,6 +705,8 @@ const RevenueSummaryReport = ({ data }) => {
                       <td className="px-5 py-3">
                         {r.origin} - {r.destination}
                       </td>
+                      <td className="px-5 py-3">{r.tripsCount ?? 0}</td>
+                      <td className="px-5 py-3">{r.passengersCount ?? 0}</td>
                       <td className="px-5 py-3 text-orange-400">₱{r.revenue.toLocaleString()}</td>
                     </tr>
                   ))
