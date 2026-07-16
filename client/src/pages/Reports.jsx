@@ -11,7 +11,8 @@ import {
   Route,
   PhilippinePeso,
   Activity,
-  AlertCircle
+  AlertCircle,
+  Info
 } from "lucide-react";
 
 import { motion } from "framer-motion";
@@ -48,6 +49,14 @@ const PRESETS = [
 
 const PRESET_LABELS = PRESETS.reduce((acc, p) => ({ ...acc, [p.id]: p.label }), { custom: "Custom Range" });
 
+// Consistent status colors used across every chart in this module.
+const STATUS_COLORS = {
+  Scheduled: "#FBBF24",
+  Departed: "#38BDF8",
+  Arrived: "#34D399",
+  Cancelled: "#EF4444"
+};
+
 const COLORS = ["#F97316", "#34D399", "#38BDF8", "#A78BFA", "#F472B6", "#FBBF24", "#71717A"];
 
 const tooltipStyle = {
@@ -62,6 +71,14 @@ const formatDate = (dateStr) => {
   if (!dateStr) return "N/A";
   return new Date(dateStr).toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" });
 };
+
+// Small reusable note for reports that are intentionally Arrived-only.
+const ArrivedOnlyNote = () => (
+  <div className="flex items-start gap-2 text-xs text-zinc-500 bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3">
+    <Info size={14} className="shrink-0 mt-0.5" />
+    <span>Based on confirmed (Arrived) trips only. Scheduled and Departed trips are excluded since their passenger/revenue figures are not yet final.</span>
+  </div>
+);
 
 const Reports = () => {
   const [loading, setLoading] = useState(false);
@@ -316,27 +333,23 @@ const JeepneyActivityReport = ({ data }) => {
   const metrics = data.jeepneyMetrics || [];
 
   const totalTripsInPeriod = metrics.reduce((sum, j) => sum + (j.tripsInPeriod?.totalTrips || 0), 0);
-  const totalCompleted = metrics.reduce((sum, j) => sum + (j.tripsInPeriod?.completedTrips || 0), 0);
+  const totalArrived = metrics.reduce((sum, j) => sum + (j.tripsInPeriod?.arrivedTrips || 0), 0);
   const totalCancelled = metrics.reduce((sum, j) => sum + (j.tripsInPeriod?.cancelledTrips || 0), 0);
 
-  const chartData = metrics.map((j) => {
-    const total = j.tripsInPeriod?.totalTrips || 0;
-    const completed = j.tripsInPeriod?.completedTrips || 0;
-    const cancelled = j.tripsInPeriod?.cancelledTrips || 0;
-    return {
-      name: j.plateNumber,
-      Completed: completed,
-      Cancelled: cancelled,
-      "Scheduled/Departed": Math.max(total - completed - cancelled, 0)
-    };
-  });
+  const chartData = metrics.map((j) => ({
+    name: j.plateNumber,
+    Scheduled: j.tripsInPeriod?.scheduledTrips || 0,
+    Departed: j.tripsInPeriod?.departedTrips || 0,
+    Arrived: j.tripsInPeriod?.arrivedTrips || 0,
+    Cancelled: j.tripsInPeriod?.cancelledTrips || 0
+  }));
 
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <StatCard label="Total Jeepneys" value={data.totalJeepneysCount ?? 0} />
         <StatCard label="Trips In Period" value={totalTripsInPeriod} />
-        <StatCard label="Completed Trips" value={totalCompleted} accent="text-emerald-400" />
+        <StatCard label="Arrived Trips" value={totalArrived} accent="text-emerald-400" />
         <StatCard label="Cancelled Trips" value={totalCancelled} accent="text-red-400" />
       </div>
 
@@ -352,9 +365,10 @@ const JeepneyActivityReport = ({ data }) => {
               <YAxis stroke="#A1A1AA" fontSize={11} allowDecimals={false} />
               <Tooltip contentStyle={tooltipStyle} />
               <Legend wrapperStyle={{ fontSize: "11px" }} />
-              <Bar dataKey="Completed" stackId="a" fill="#34D399" />
-              <Bar dataKey="Cancelled" stackId="a" fill="#EF4444" />
-              <Bar dataKey="Scheduled/Departed" stackId="a" fill="#71717A" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="Scheduled" stackId="a" fill={STATUS_COLORS.Scheduled} />
+              <Bar dataKey="Departed" stackId="a" fill={STATUS_COLORS.Departed} />
+              <Bar dataKey="Arrived" stackId="a" fill={STATUS_COLORS.Arrived} />
+              <Bar dataKey="Cancelled" stackId="a" fill={STATUS_COLORS.Cancelled} radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         )}
@@ -365,7 +379,7 @@ const JeepneyActivityReport = ({ data }) => {
           <h3 className="text-sm font-semibold text-white">Fleet Breakdown</h3>
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full text-left min-w-[720px]">
+          <table className="w-full text-left min-w-[880px]">
             <thead>
               <tr className="text-[10px] uppercase font-mono text-zinc-500 border-b border-zinc-800">
                 <th className="px-5 py-3">Plate No.</th>
@@ -374,14 +388,16 @@ const JeepneyActivityReport = ({ data }) => {
                 <th className="px-5 py-3">Capacity</th>
                 <th className="px-5 py-3">Current Status</th>
                 <th className="px-5 py-3">Total Trips</th>
-                <th className="px-5 py-3">Completed</th>
+                <th className="px-5 py-3">Scheduled</th>
+                <th className="px-5 py-3">Departed</th>
+                <th className="px-5 py-3">Arrived</th>
                 <th className="px-5 py-3">Cancelled</th>
               </tr>
             </thead>
             <tbody>
               {metrics.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-5 py-8 text-center text-zinc-500 text-xs">
+                  <td colSpan={10} className="px-5 py-8 text-center text-zinc-500 text-xs">
                     No jeepneys found.
                   </td>
                 </tr>
@@ -406,7 +422,9 @@ const JeepneyActivityReport = ({ data }) => {
                       </span>
                     </td>
                     <td className="px-5 py-3">{j.tripsInPeriod?.totalTrips || 0}</td>
-                    <td className="px-5 py-3 text-emerald-400">{j.tripsInPeriod?.completedTrips || 0}</td>
+                    <td className="px-5 py-3 text-amber-400">{j.tripsInPeriod?.scheduledTrips || 0}</td>
+                    <td className="px-5 py-3 text-sky-400">{j.tripsInPeriod?.departedTrips || 0}</td>
+                    <td className="px-5 py-3 text-emerald-400">{j.tripsInPeriod?.arrivedTrips || 0}</td>
                     <td className="px-5 py-3 text-red-400">{j.tripsInPeriod?.cancelledTrips || 0}</td>
                   </tr>
                 ))
@@ -427,17 +445,20 @@ const RouteSummaryReport = ({ data }) => {
 
   const chartData = routes.map((r) => ({
     name: `${r.origin} - ${r.destination}`,
-    Completed: r.completedTrips,
-    Cancelled: r.cancelledTrips,
-    "Scheduled/Departed": Math.max(r.totalTrips - r.completedTrips - r.cancelledTrips, 0)
+    Scheduled: r.scheduledTrips || 0,
+    Departed: r.departedTrips || 0,
+    Arrived: r.arrivedTrips || 0,
+    Cancelled: r.cancelledTrips || 0
   }));
 
   return (
     <div className="space-y-6">
+      <ArrivedOnlyNote />
+
       <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
         <StatCard label="Total Routes" value={data.routesCount ?? 0} />
         <StatCard label="Total Trips" value={routes.reduce((s, r) => s + r.totalTrips, 0)} />
-        <StatCard label="Passengers Carried" value={routes.reduce((s, r) => s + r.totalPassengers, 0)} />
+        <StatCard label="Passengers Carried (Arrived)" value={routes.reduce((s, r) => s + r.totalPassengers, 0)} />
       </div>
 
       <div className="bg-zinc-950 border border-zinc-800 rounded-xl p-5">
@@ -452,9 +473,10 @@ const RouteSummaryReport = ({ data }) => {
               <YAxis stroke="#A1A1AA" fontSize={11} allowDecimals={false} />
               <Tooltip contentStyle={tooltipStyle} />
               <Legend wrapperStyle={{ fontSize: "11px" }} />
-              <Bar dataKey="Completed" stackId="a" fill="#34D399" />
-              <Bar dataKey="Cancelled" stackId="a" fill="#EF4444" />
-              <Bar dataKey="Scheduled/Departed" stackId="a" fill="#71717A" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="Scheduled" stackId="a" fill={STATUS_COLORS.Scheduled} />
+              <Bar dataKey="Departed" stackId="a" fill={STATUS_COLORS.Departed} />
+              <Bar dataKey="Arrived" stackId="a" fill={STATUS_COLORS.Arrived} />
+              <Bar dataKey="Cancelled" stackId="a" fill={STATUS_COLORS.Cancelled} radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         )}
@@ -465,22 +487,24 @@ const RouteSummaryReport = ({ data }) => {
           <h3 className="text-sm font-semibold text-white">Route Breakdown</h3>
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full text-left min-w-[720px]">
+          <table className="w-full text-left min-w-[920px]">
             <thead>
               <tr className="text-[10px] uppercase font-mono text-zinc-500 border-b border-zinc-800">
                 <th className="px-5 py-3">Origin</th>
                 <th className="px-5 py-3">Destination</th>
                 <th className="px-5 py-3">Fare</th>
                 <th className="px-5 py-3">Total Trips</th>
-                <th className="px-5 py-3">Completed</th>
+                <th className="px-5 py-3">Scheduled</th>
+                <th className="px-5 py-3">Departed</th>
+                <th className="px-5 py-3">Arrived</th>
                 <th className="px-5 py-3">Cancelled</th>
-                <th className="px-5 py-3">Passengers</th>
+                <th className="px-5 py-3">Passengers (Arrived)</th>
               </tr>
             </thead>
             <tbody>
               {routes.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-5 py-8 text-center text-zinc-500 text-xs">
+                  <td colSpan={9} className="px-5 py-8 text-center text-zinc-500 text-xs">
                     No routes found.
                   </td>
                 </tr>
@@ -491,7 +515,9 @@ const RouteSummaryReport = ({ data }) => {
                     <td className="px-5 py-3">{r.destination}</td>
                     <td className="px-5 py-3">₱{r.estimatedFare}</td>
                     <td className="px-5 py-3">{r.totalTrips}</td>
-                    <td className="px-5 py-3 text-emerald-400">{r.completedTrips}</td>
+                    <td className="px-5 py-3 text-amber-400">{r.scheduledTrips || 0}</td>
+                    <td className="px-5 py-3 text-sky-400">{r.departedTrips || 0}</td>
+                    <td className="px-5 py-3 text-emerald-400">{r.arrivedTrips}</td>
                     <td className="px-5 py-3 text-red-400">{r.cancelledTrips}</td>
                     <td className="px-5 py-3">{r.totalPassengers}</td>
                   </tr>
@@ -509,7 +535,6 @@ const RouteSummaryReport = ({ data }) => {
 // Daily Trip Report
 // =====================================================
 const DailyTripReport = ({ data, trips }) => {
-  const statusColor = { Scheduled: "#FBBF24", Departed: "#38BDF8", Arrived: "#34D399", Cancelled: "#EF4444" };
   const statusData = Object.entries(data.tripsByStatus || {}).map(([name, value]) => ({ name, value }));
   const hasStatusData = statusData.some((s) => s.value > 0);
 
@@ -517,7 +542,7 @@ const DailyTripReport = ({ data, trips }) => {
     <div className="space-y-6">
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <StatCard label="Total Trips" value={data.totalTrips ?? 0} />
-        <StatCard label="Completed Trips" value={data.completedTrips ?? 0} accent="text-emerald-400" />
+        <StatCard label="Arrived Trips" value={data.arrivedTrips ?? 0} accent="text-emerald-400" />
         <StatCard label="Cancelled Trips" value={data.cancelledTrips ?? 0} accent="text-red-400" />
         <StatCard label="Total Passengers" value={data.totalPassengers ?? 0} />
       </div>
@@ -532,7 +557,7 @@ const DailyTripReport = ({ data, trips }) => {
               <PieChart>
                 <Pie data={statusData} dataKey="value" nameKey="name" innerRadius={60} outerRadius={90} paddingAngle={3}>
                   {statusData.map((entry, i) => (
-                    <Cell key={entry.name} fill={statusColor[entry.name] || COLORS[i % COLORS.length]} />
+                    <Cell key={entry.name} fill={STATUS_COLORS[entry.name] || COLORS[i % COLORS.length]} />
                   ))}
                 </Pie>
                 <Tooltip contentStyle={tooltipStyle} />
@@ -589,6 +614,8 @@ const DailyTripReport = ({ data, trips }) => {
 // =====================================================
 const PassengerSummaryReport = ({ data, details }) => (
   <div className="space-y-6">
+    <ArrivedOnlyNote />
+
     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
       <StatCard label="Total Passengers" value={data.totalPassengers ?? 0} />
       <StatCard label="Average Occupancy" value={`${data.averageOccupancy ?? 0}%`} />
@@ -649,13 +676,15 @@ const RevenueSummaryReport = ({ data }) => {
 
   return (
     <div className="space-y-6">
+      <ArrivedOnlyNote />
+
       <div className="grid grid-cols-2 gap-4">
         <StatCard
           label="Estimated Revenue"
           value={`₱${(data.overallEstimatedRevenue ?? 0).toLocaleString()}`}
           accent="text-orange-400"
         />
-        <StatCard label="Completed Trips" value={data.completedTripsCount ?? 0} />
+        <StatCard label="Arrived Trips" value={data.arrivedTripsCount ?? 0} />
       </div>
 
       <div className="grid md:grid-cols-2 gap-5">

@@ -7,7 +7,9 @@ import {
   Key,
   User,
   AlertCircle,
-  RefreshCw
+  RefreshCw,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 
 const Login = () => {
@@ -25,6 +27,7 @@ const Login = () => {
   });
 
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   const handleInputChange = (e) => {
     setForm({
@@ -268,7 +271,7 @@ const Login = () => {
 
                 <input
 
-                  type="password"
+                  type={showPassword ? "text" : "password"}
 
                   name="password"
 
@@ -280,9 +283,29 @@ const Login = () => {
 
                   required
 
-                  className="w-full pl-10 pr-4 py-3 rounded-lg bg-[#09090B] border border-[#27272A] text-white outline-none focus:border-[#F97316]"
+                  className="w-full pl-10 pr-10 py-3 rounded-lg bg-[#09090B] border border-[#27272A] text-white outline-none focus:border-[#F97316]"
 
                 />
+
+                <button
+
+                  type="button"
+
+                  onClick={() => setShowPassword((prev) => !prev)}
+
+                  tabIndex={-1}
+
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[#A1A1AA] hover:text-white transition"
+
+                >
+
+                  {showPassword ? (
+                    <EyeOff className="w-4 h-4" />
+                  ) : (
+                    <Eye className="w-4 h-4" />
+                  )}
+
+                </button>
 
               </div>
 

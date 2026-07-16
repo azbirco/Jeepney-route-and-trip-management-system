@@ -11,6 +11,7 @@ import {
 import { protect } from '../middleware/authMiddleware.js';
 import { authorize } from '../middleware/roleMiddleware.js';
 
+console.log('🟢 NEW reportController.js LOADED —', new Date().toISOString());
 
 const router = express.Router();
 

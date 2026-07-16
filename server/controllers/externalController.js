@@ -15,8 +15,13 @@ export const getExternalSummary = async (req, res) => {
   try {
 
 
+    // FIXED: dating walang filter, kaya kinukuha lahat ng jeepney
+    // (kasama na yung Inactive). "Active fleet" = hindi Inactive
+    // (Available + In Transit).
     const totalJeepneys =
-      await Jeepney.countDocuments();
+      await Jeepney.countDocuments({
+        status: { $ne: "Inactive" }
+      });
 
 
 
@@ -88,6 +93,54 @@ export const getExternalSummary = async (req, res) => {
 
 
 
+    // NEW: Revenue by Route — kulang na piece para sa "Revenue by Route"
+    // bar chart sa dashboard mo. Dating wala talagang endpoint nito.
+    const revenueByRouteRaw =
+      await Trip.aggregate([
+
+        {
+          $match:{
+            status:"Arrived"
+          }
+        },
+
+        {
+          $lookup:{
+            from:"routes",
+            localField:"route",
+            foreignField:"_id",
+            as:"routeInfo"
+          }
+        },
+
+        {
+          $unwind:"$routeInfo"
+        },
+
+        {
+          $group:{
+            _id:"$route",
+            origin:{ $first:"$routeInfo.origin" },
+            destination:{ $first:"$routeInfo.destination" },
+            totalRevenue:{ $sum:"$estimatedRevenue" }
+          }
+        },
+
+        {
+          $sort:{ totalRevenue:-1 }
+        }
+
+      ]);
+
+
+    const revenueByRoute =
+      revenueByRouteRaw.map(item => ({
+        route: `${item.origin} - ${item.destination}`,
+        totalRevenue: item.totalRevenue
+      }));
+
+
+
     const occupancy =
       await PassengerStatistic.aggregate([
 
@@ -137,6 +190,11 @@ export const getExternalSummary = async (req, res) => {
 
       data:{
 
+        // NEW: para malaman ni central admin kung gaano ka-fresh
+        // itong data (useful kung nag-cache siya sa kanyang side)
+        generatedAt:
+          new Date(),
+
 
         totalJeepneys,
 
@@ -162,7 +220,11 @@ export const getExternalSummary = async (req, res) => {
 
 
         tripsByStatus:
-          statusSummary
+          statusSummary,
+
+
+        // NEW: para sa "Revenue by Route" bar chart
+        revenueByRoute
 
       }
 
@@ -205,16 +267,57 @@ export const getExternalTransactions = async (req,res)=>{
   try{
 
 
-    const trips = await Trip.find()
+    // NEW: optional query params para may date range at pagination
+    // ang central admin, kung sakaling kailangan niya
+    const {
+      startDate,
+      endDate,
+      page = 1,
+      limit = 50
+    } = req.query;
 
+
+    const filter = {};
+
+    if (startDate || endDate) {
+
+      filter.createdAt = {};
+
+      if (startDate) {
+        filter.createdAt.$gte = new Date(startDate);
+      }
+
+      if (endDate) {
+        filter.createdAt.$lte = new Date(endDate);
+      }
+
+    }
+
+
+    const pageNum = Math.max(parseInt(page) || 1, 1);
+
+    const limitNum = Math.min(parseInt(limit) || 50, 100);
+
+    const skip = (pageNum - 1) * limitNum;
+
+
+    const totalCount =
+      await Trip.countDocuments(filter);
+
+
+    const trips = await Trip.find(filter)
+
+      // FIXED: dating "routeName ... fare" — mga fields na hindi
+      // umiiral sa Route schema. Totoong fields ay routeCode at
+      // estimatedFare.
       .populate(
         "route",
-        "routeName origin destination fare"
+        "routeCode origin destination estimatedFare"
       )
 
       .populate(
         "jeepney",
-        "plateNumber jeepneyCode"
+        "plateNumber jeepneyNumber"
       )
 
       .populate(
@@ -226,7 +329,9 @@ export const getExternalTransactions = async (req,res)=>{
         createdAt:-1
       })
 
-      .limit(50)
+      .skip(skip)
+
+      .limit(limitNum)
 
       .lean();
 
@@ -296,18 +401,10 @@ export const getExternalTransactions = async (req,res)=>{
 
 
 
-      fare:
-
-        trip.route
-
-        ?
-
-        trip.route.fare
-
-        :
-
-        null,
-
+      // REMOVED: yung "fare" field dati (trip.route.fare) — palaging
+      // null kasi hindi umiiral yung field na yun sa Route schema.
+      // "amount" na lang ang ginagamit, at siya na rin talaga ang
+      // pinapakita sa "Fare Revenue" column sa UI.
 
 
       amount:
@@ -334,7 +431,16 @@ export const getExternalTransactions = async (req,res)=>{
 
       success:true,
 
-      data:transactions
+      data:transactions,
+
+      // NEW: pagination metadata para may Next/Previous si central
+      // admin sa sarili niyang UI, gaya ng nasa dashboard mo
+      pagination:{
+        currentPage: pageNum,
+        totalPages: Math.ceil(totalCount / limitNum),
+        totalCount,
+        limit: limitNum
+      }
 
     });
 

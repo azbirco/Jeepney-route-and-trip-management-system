@@ -17,13 +17,11 @@ const getDateRange = (period, startDateStr, endDateStr) => {
 
   switch (period) {
     case 'all':
-      start = new Date(0);
-      end = new Date(8640000000000000); // max valid JS date
-      break;
+      return { start: new Date(0), end: new Date(8640000000000000) };
 
     case 'week': {
       start = new Date(now);
-      const day = start.getDay(); // 0 = Sun ... 6 = Sat
+      const day = start.getDay();
       const diffToMonday = day === 0 ? 6 : day - 1;
       start.setDate(start.getDate() - diffToMonday);
       break;
@@ -97,20 +95,20 @@ export const getDailyTripReport = async (req, res) => {
       .populate('schedule');
 
     const tripsByStatus = { Scheduled: 0, Departed: 0, Arrived: 0, Cancelled: 0 };
-    let completedTrips = 0;
+    let arrivedTrips = 0;
     let cancelledTrips = 0;
     let totalPassengers = 0;
 
     trips.forEach((trip) => {
       tripsByStatus[trip.status] = (tripsByStatus[trip.status] || 0) + 1;
       if (trip.status === 'Arrived') {
-        completedTrips++;
+        arrivedTrips++;
         totalPassengers += trip.passengerCount || 0;
       }
       if (trip.status === 'Cancelled') cancelledTrips++;
     });
 
-    const summaryData = { totalTrips: trips.length, completedTrips, cancelledTrips, totalPassengers, tripsByStatus };
+    const summaryData = { totalTrips: trips.length, arrivedTrips, cancelledTrips, totalPassengers, tripsByStatus };
 
     const report = await maybeSaveReport({
       req, reportType: 'Daily Trip Report', start, end, summaryData
@@ -132,18 +130,21 @@ export const getDailyTripReport = async (req, res) => {
 
 // @desc    Passenger Summary Report
 // @route   GET /api/reports/passengers
+// NOTE: Intentionally Arrived-only. Passenger counts on non-Arrived trips
+// (Scheduled/Departed) are not yet final — they can still change before
+// the trip is confirmed. This report reflects confirmed, audited data only.
 export const getPassengerSummaryReport = async (req, res) => {
   try {
     const { period, startDate, endDate } = req.query;
     const { start, end } = getDateRange(period, startDate, endDate);
 
-    const completedTrips = await Trip.find({
+    const arrivedTrips = await Trip.find({
       departureDate: { $gte: start, $lte: end },
       status: 'Arrived'
     }).select('_id');
 
     const stats = await PassengerStatistic.find({
-      trip: { $in: completedTrips.map((trip) => trip._id) }
+      trip: { $in: arrivedTrips.map((trip) => trip._id) }
     }).populate({ path: 'trip', populate: ['route', 'schedule', 'jeepney'] });
 
     // Newest trip date first, for the same "Recent" reasoning as Daily Trip Report.
@@ -202,7 +203,7 @@ export const getRouteSummaryReport = async (req, res) => {
 
     for (const route of routes) {
       const trips = await Trip.find({ route: route._id, departureDate: { $gte: start, $lte: end } });
-      const completedTrips = trips.filter((trip) => trip.status === 'Arrived');
+      const arrivedTrips = trips.filter((trip) => trip.status === 'Arrived');
 
       routeSummary.push({
         routeId: route._id,
@@ -210,9 +211,13 @@ export const getRouteSummaryReport = async (req, res) => {
         destination: route.destination,
         estimatedFare: route.estimatedFare,
         totalTrips: trips.length,
-        completedTrips: completedTrips.length,
+        scheduledTrips: trips.filter((trip) => trip.status === 'Scheduled').length,
+        departedTrips: trips.filter((trip) => trip.status === 'Departed').length,
+        arrivedTrips: arrivedTrips.length,
         cancelledTrips: trips.filter((trip) => trip.status === 'Cancelled').length,
-        totalPassengers: completedTrips.reduce((sum, trip) => sum + (trip.passengerCount || 0), 0)
+        // Arrived-only, same reasoning as Passenger/Revenue Summary reports —
+        // passenger counts aren't final until a trip is confirmed Arrived.
+        totalPassengers: arrivedTrips.reduce((sum, trip) => sum + (trip.passengerCount || 0), 0)
       });
     }
 
@@ -257,7 +262,9 @@ export const getJeepneyActivityReport = async (req, res) => {
         capacity: jeepney.capacity,
         tripsInPeriod: {
           totalTrips: trips.length,
-          completedTrips: trips.filter((t) => t.status === 'Arrived').length,
+          scheduledTrips: trips.filter((t) => t.status === 'Scheduled').length,
+          departedTrips: trips.filter((t) => t.status === 'Departed').length,
+          arrivedTrips: trips.filter((t) => t.status === 'Arrived').length,
           cancelledTrips: trips.filter((t) => t.status === 'Cancelled').length
         }
       });
@@ -284,6 +291,9 @@ export const getJeepneyActivityReport = async (req, res) => {
 
 // @desc    Revenue Summary Report
 // @route   GET /api/reports/revenue
+// NOTE: Intentionally Arrived-only — revenue is only recognized once a
+// trip's passenger count is confirmed at arrival, not while still
+// Scheduled/Departed and possibly subject to change.
 export const getRevenueSummaryReport = async (req, res) => {
   try {
     const { period, startDate, endDate } = req.query;
@@ -321,7 +331,7 @@ export const getRevenueSummaryReport = async (req, res) => {
 
     const summaryData = {
       overallEstimatedRevenue: revenue,
-      completedTripsCount: trips.length,
+      arrivedTripsCount: trips.length,
       revenueByRoute: Object.values(revenueByRoute)
     };
 
