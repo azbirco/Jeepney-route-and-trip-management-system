@@ -12,6 +12,7 @@ import {
 import {
   BarChart,
   Bar,
+  Cell,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -26,6 +27,22 @@ import api from '../services/api';
 // recorded passenger statistics show up without requiring manual refresh
 // or navigating away and back.
 const POLL_INTERVAL_MS = 30000;
+
+// Per-route bar palette. Cycled by index so each route corridor gets a
+// visually distinct, consistent color across both charts below (rather
+// than every bar sharing one flat color).
+const ROUTE_CHART_COLORS = [
+  '#F97316', // orange
+  '#10B981', // emerald
+  '#38BDF8', // sky
+  '#A78BFA', // violet
+  '#F472B6', // pink
+  '#FACC15', // amber/yellow
+  '#F87171', // red
+  '#34D399', // teal-green
+  '#818CF8', // indigo
+  '#FB923C'  // light orange
+];
 
 
 const Passengers = () => {
@@ -213,7 +230,14 @@ const Passengers = () => {
                     contentStyle={{ backgroundColor: '#09090B', border: '1px solid #27272A', fontSize: 12 }}
                     labelStyle={{ color: '#FFFFFF' }}
                   />
-                  <Bar dataKey="passengers" fill="#F97316" radius={[4, 4, 0, 0]}/>
+                  <Bar dataKey="passengers" radius={[4, 4, 0, 0]}>
+                    {routeChartData.map((entry, index) => (
+                      <Cell
+                        key={`passengers-cell-${entry.route}-${index}`}
+                        fill={ROUTE_CHART_COLORS[index % ROUTE_CHART_COLORS.length]}
+                      />
+                    ))}
+                  </Bar>
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -241,7 +265,14 @@ const Passengers = () => {
                     labelStyle={{ color: '#FFFFFF' }}
                     formatter={(value) => [`₱${Number(value).toLocaleString()}`, 'Revenue']}
                   />
-                  <Bar dataKey="revenue" fill="#10B981" radius={[4, 4, 0, 0]}/>
+                  <Bar dataKey="revenue" radius={[4, 4, 0, 0]}>
+                    {routeChartData.map((entry, index) => (
+                      <Cell
+                        key={`revenue-cell-${entry.route}-${index}`}
+                        fill={ROUTE_CHART_COLORS[index % ROUTE_CHART_COLORS.length]}
+                      />
+                    ))}
+                  </Bar>
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -278,15 +309,16 @@ const Passengers = () => {
           <div className="overflow-x-auto">
             <table className="w-full text-left">
 
-              <thead>
-                <tr className="text-[10px] uppercase font-mono text-[#A1A1AA] border-b border-[#27272A]">
-                  <th className="px-5 py-4">Trip</th>
-                  <th className="px-5 py-4">Route</th>
-                  <th className="px-5 py-4">Date</th>
-                  <th className="px-5 py-4">Jeepney</th>
-                  <th className="px-5 py-4">Passenger Count</th>
-                  <th className="px-5 py-4">Occupancy</th>
-                  <th className="px-5 py-4">Revenue</th>
+              <thead className="bg-[#09090B] border-b border-[#27272A]">
+                <tr>
+                  <th className="px-5 py-4 text-[11px] font-mono uppercase text-[#A1A1AA]">Trip</th>
+                  <th className="px-5 py-4 text-[11px] font-mono uppercase text-[#A1A1AA]">Route</th>
+                  <th className="px-5 py-4 text-[11px] font-mono uppercase text-[#A1A1AA]">Date</th>
+                  <th className="px-5 py-4 text-[11px] font-mono uppercase text-[#A1A1AA]">Jeepney</th>
+                  <th className="px-5 py-4 text-[11px] font-mono uppercase text-[#A1A1AA]">Passenger Count</th>
+                  <th className="px-5 py-4 text-[11px] font-mono uppercase text-[#A1A1AA]">Occupancy</th>
+                  <th className="px-5 py-4 text-[11px] font-mono uppercase text-[#A1A1AA]">Estimated Fare</th>
+                  <th className="px-5 py-4 text-[11px] font-mono uppercase text-[#A1A1AA]">Revenue</th>
                 </tr>
               </thead>
 
@@ -299,7 +331,7 @@ const Passengers = () => {
                   return (
                     <tr
                       key={item._id || index}
-                      className="text-xs text-white border-b border-[#27272A] hover:bg-[#27272A]/30"
+                      className="text-xs text-white border-b border-[#27272A] hover:bg-[#18181B] transition-colors"
                     >
                       <td className="px-5 py-4 font-mono">
                         {item.trip?.tripCode || "---"}
@@ -341,6 +373,12 @@ const Passengers = () => {
                             </span>
                           )}
                         </div>
+                      </td>
+
+                      <td className="px-5 py-4">
+                        {route?.estimatedFare != null
+                          ? `₱${Number(route.estimatedFare).toLocaleString()}`
+                          : "---"}
                       </td>
 
                       <td className="px-5 py-4">

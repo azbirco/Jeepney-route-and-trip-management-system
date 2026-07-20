@@ -116,11 +116,7 @@ const Schedules = () => {
     }, 4000);
   };
 
-  // Builds the route dropdown options for a given modal instance.
-  // If the currently-assigned route has gone Inactive since the schedule
-  // was created, it's appended (and rendered disabled) so the true value
-  // stays visible instead of showing blank — but it can't be reselected
-  // once changed, and no other Inactive route becomes selectable.
+
   const getRouteOptions = (currentRouteId) => {
     const isCurrentActive = routes.some((r) => r._id === currentRouteId);
     if (!currentRouteId || isCurrentActive) return routes;
@@ -476,7 +472,7 @@ const filteredSchedules = schedules
             className="px-4 py-2 bg-[#F97316] hover:bg-[#EA580C] text-xs font-bold text-[#FFFFFF] rounded-lg shadow-md shadow-[#F97316]/10 hover:shadow-lg hover:shadow-[#F97316]/20 transition-all flex items-center justify-center gap-1.5 self-start sm:self-center cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Plus className="w-4 h-4" />
-            <span>Configure Schedule Slot</span>
+            <span>Add Schedule Slot</span>
           </button>
         )}
       </div>
@@ -517,7 +513,7 @@ const filteredSchedules = schedules
           </div>
           <div>
             <h4 className="text-2xl font-black text-[#FFFFFF] font-mono">{loading ? '...' : totalSchedules}</h4>
-            <span className="text-[10px] text-[#A1A1AA] mt-0.5 block">Configured Departure Slots</span>
+            <span className="text-[10px] text-[#A1A1AA] mt-0.5 block">Registered departure slots</span>
           </div>
         </div>
 
@@ -538,14 +534,14 @@ const filteredSchedules = schedules
         {/* Inactive Schedules */}
         <div className="bg-[#18181B] border border-[#27272A] p-4 rounded-xl flex flex-col justify-between h-28 relative overflow-hidden backdrop-blur-md">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-mono text-[#A1A1AA] uppercase">Suspended Slots</span>
+            <span className="text-xs font-mono text-[#A1A1AA] uppercase">Inactive Schedules</span>
             <div className="p-1 rounded bg-[#EF4444]/5 border border-[#EF4444]/10 text-[#EF4444]">
               <AlertCircle className="w-4 h-4" />
             </div>
           </div>
           <div>
             <h4 className="text-2xl font-black text-[#EF4444] font-mono">{loading ? '...' : inactiveSchedules}</h4>
-            <span className="text-[10px] text-[#A1A1AA] mt-0.5 block">Temporarily archived slots</span>
+            <span className="text-[10px] text-[#A1A1AA] mt-0.5 block">Excluded from current schedule</span>
           </div>
         </div>
       </div>
@@ -764,7 +760,7 @@ const filteredSchedules = schedules
         isOpen={isEditOpen}
         onClose={() => setIsEditOpen(false)}
         title={selectedSchedule ? `Modify Schedule: ${selectedSchedule.scheduleCode}` : 'Modify Schedule'}
-        icon={<Clock className="w-5 h-5 text-amber-500" />}
+        icon={<Clock className="w-5 h-5 text-blue-500" />}
       >
         <form onSubmit={handleEditSubmit} className="space-y-4">
           {formErrors.form && (

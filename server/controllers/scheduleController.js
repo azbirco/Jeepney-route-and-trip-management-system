@@ -40,7 +40,7 @@ export const createSchedule = async (req, res) => {
       user: req.user?._id,
       action: 'Create Schedule',
       details: `Created schedule ${schedule.departureTime}`,
-      ipAddress: req.ip
+
     });
 
     const populated = await Schedule.findById(schedule._id)
@@ -183,7 +183,7 @@ export const updateSchedule = async (req, res) => {
       user: req.user?._id,
       action: 'Update Schedule',
       details: `Updated schedule ${schedule.departureTime}`,
-      ipAddress: req.ip
+
     });
 
     res.status(200).json({
@@ -230,7 +230,7 @@ export const deleteSchedule = async (req, res) => {
       user: req.user?._id,
       action: 'Delete Schedule',
       details: `Deleted schedule ${schedule.departureTime}`,
-      ipAddress: req.ip
+
     });
 
     res.status(200).json({
@@ -310,7 +310,7 @@ export const overrideSchedule = async (req, res) => {
       user: req.user?._id,
       action: 'Admin Override - Schedule',
       details: `Admin corrected schedule ${schedule.scheduleCode}. Reason: ${reason.trim()}`,
-      ipAddress: req.ip
+
     });
 
     res.status(200).json({
@@ -370,7 +370,7 @@ export const acknowledgeScheduleOverride = async (req, res) => {
       user: req.user?._id,
       action: 'Override Acknowledged - Schedule',
       details: `Terminal Personnel acknowledged admin override on schedule ${schedule.scheduleCode}`,
-      ipAddress: req.ip
+
     });
 
     res.status(200).json({
@@ -430,7 +430,7 @@ export const disputeScheduleOverride = async (req, res) => {
       user: req.user?._id,
       action: 'Override Disputed - Schedule',
       details: `Terminal Personnel disputed admin override on schedule ${schedule.scheduleCode}. Dispute reason: ${disputeReason.trim()}`,
-      ipAddress: req.ip
+
     });
 
     res.status(200).json({

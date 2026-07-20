@@ -40,29 +40,29 @@ const ScheduleTable = ({
   const getOverrideButtonLabel = (schedule) => {
     if (schedule.overrideDisputeReason) return "Resolve Dispute";
     if (schedule.overridePending) return "Revise Override";
-    return "Override";
+    return "Admin Edit";
   };
 
   return (
     <div className="overflow-x-auto">
-      <table className="w-full text-xs">
+      <table className="w-full">
         <thead className="bg-[#09090B] border-b border-[#27272A]">
-          <tr className="text-[#A1A1AA] uppercase tracking-wide">
+          <tr>
             <th
               onClick={() => onSort("scheduleCode")}
-              className="px-5 py-4 text-left cursor-pointer hover:text-white select-none"
+              className="px-5 py-4 text-left text-[11px] font-mono uppercase text-[#A1A1AA] cursor-pointer hover:text-white select-none"
             >
               Schedule Code
               <SortIcon field="scheduleCode" />
             </th>
 
-            <th className="px-5 py-4 text-left">
+            <th className="px-5 py-4 text-left text-[11px] font-mono uppercase text-[#A1A1AA]">
               Route
             </th>
 
             <th
               onClick={() => onSort("departureTime")}
-              className="px-5 py-4 text-left cursor-pointer hover:text-white select-none"
+              className="px-5 py-4 text-left text-[11px] font-mono uppercase text-[#A1A1AA] cursor-pointer hover:text-white select-none"
             >
               Departure
               <SortIcon field="departureTime" />
@@ -70,7 +70,7 @@ const ScheduleTable = ({
 
             <th
               onClick={() => onSort("expectedArrivalTime")}
-              className="px-5 py-4 text-left cursor-pointer hover:text-white select-none"
+              className="px-5 py-4 text-left text-[11px] font-mono uppercase text-[#A1A1AA] cursor-pointer hover:text-white select-none"
             >
               Estimated Arrival
               <SortIcon field="expectedArrivalTime" />
@@ -78,13 +78,13 @@ const ScheduleTable = ({
 
             <th
               onClick={() => onSort("status")}
-              className="px-5 py-4 text-left cursor-pointer hover:text-white select-none"
+              className="px-5 py-4 text-left text-[11px] font-mono uppercase text-[#A1A1AA] cursor-pointer hover:text-white select-none"
             >
               Status
               <SortIcon field="status" />
             </th>
 
-            <th className="px-5 py-4 text-center">
+            <th className="px-5 py-4 text-center text-[11px] font-mono uppercase text-[#A1A1AA]">
               Actions
             </th>
           </tr>
@@ -100,44 +100,44 @@ const ScheduleTable = ({
                 className={`border-b border-[#27272A] transition-colors ${
                   schedule.overridePending
                     ? "bg-amber-500/5 hover:bg-amber-500/10"
-                    : "hover:bg-[#1A1A1D]"
+                    : "hover:bg-[#18181B]"
                 }`}
               >
                 {/* Schedule Code */}
-                <td className="px-5 py-4 font-semibold text-white">
+                <td className="px-5 py-4 font-semibold text-white text-sm">
                   {schedule.scheduleCode}
                 </td>
 
                 {/* Route */}
                 <td className="px-5 py-4">
                   <div className="flex flex-col">
-                    <span className="text-white font-medium">
+                    <span className="text-white text-sm font-medium">
                       {route?.routeCode || "--"}
                     </span>
 
-                    <span className="text-[#A1A1AA] text-[11px]">
+                    <span className="text-[#A1A1AA] text-[10px] mt-0.5">
                       {route?.origin} → {route?.destination}
                     </span>
                   </div>
                 </td>
 
                 {/* Departure */}
-                <td className="px-5 py-4 text-white">
+                <td className="px-5 py-4 text-white text-sm">
                   {formatTime12Hour(schedule.departureTime)}
                 </td>
 
                 {/* Estimated Arrival */}
-                <td className="px-5 py-4 text-white">
+                <td className="px-5 py-4 text-white text-sm">
                   {formatTime12Hour(schedule.expectedArrivalTime)}
                 </td>
 
                 {/* Status */}
                 <td className="px-5 py-4">
                   <span
-                    className={`px-2.5 py-1 rounded-full text-[11px] font-semibold ${
+                    className={`px-3 py-1 rounded-full border text-[11px] font-semibold ${
                       schedule.status === "Inactive"
-                        ? "bg-red-500/10 text-red-400 border border-red-500/20"
-                        : "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
+                        ? "bg-red-500/10 text-red-400 border-red-500/20"
+                        : "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
                     }`}
                   >
                     {schedule.status || "Active"}
@@ -177,7 +177,7 @@ const ScheduleTable = ({
                       <>
                         <button
                           onClick={() => onEdit(schedule)}
-                          className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-400 hover:bg-amber-500/20 transition cursor-pointer text-xs font-semibold"
+                          className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-blue-500/10 border border-blue-500/20 text-blue-400 hover:bg-blue-500/20 transition cursor-pointer text-xs font-semibold"
                         >
                           <Pencil className="w-4 h-4" />
                           <span>Edit</span>

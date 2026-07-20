@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import api from "../services/api";
+import { exportReportToPDF } from "../utils/exportReportPDF";
 
 import {
   FileBarChart2,
@@ -12,7 +13,8 @@ import {
   PhilippinePeso,
   Activity,
   AlertCircle,
-  Info
+  Info,
+  Download
 } from "lucide-react";
 
 import { motion } from "framer-motion";
@@ -47,9 +49,8 @@ const PRESETS = [
   { id: "year", label: "This Year" }
 ];
 
-const PRESET_LABELS = PRESETS.reduce((acc, p) => ({ ...acc, [p.id]: p.label }), { custom: "Custom Range" });
+const PRESET_LABELS = PRESETS.reduce((acc, p) => ({ ...acc, [p.id]: p.label }), {});
 
-// Consistent status colors used across every chart in this module.
 const STATUS_COLORS = {
   Scheduled: "#FBBF24",
   Departed: "#38BDF8",
@@ -72,7 +73,34 @@ const formatDate = (dateStr) => {
   return new Date(dateStr).toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" });
 };
 
-// Small reusable note for reports that are intentionally Arrived-only.
+// BAGO: reusable badge/pill para sa Scheduled/Departed/Arrived/Cancelled counts
+const StatusCountBadge = ({ value, status }) => {
+  const styles = {
+    Scheduled: "bg-amber-500/10 text-amber-400 border-amber-500/20",
+    Departed: "bg-sky-500/10 text-sky-400 border-sky-500/20",
+    Arrived: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
+    Cancelled: "bg-red-500/10 text-red-400 border-red-500/20"
+  };
+
+  return (
+    <span
+      className={`inline-flex items-center justify-center min-w-[28px] px-2 py-0.5 rounded-full text-[11px] font-bold border ${styles[status]}`}
+    >
+      {value}
+    </span>
+  );
+};
+
+// BAGO: helper para sa ascending sort ng tripCode (TR-00001, TR-00002, ...)
+const sortTripsAscending = (trips = []) => {
+  return [...trips].sort((a, b) =>
+    (a.tripCode || "").localeCompare(b.tripCode || "", undefined, {
+      numeric: true,
+      sensitivity: "base"
+    })
+  );
+};
+
 const ArrivedOnlyNote = () => (
   <div className="flex items-start gap-2 text-xs text-zinc-500 bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3">
     <Info size={14} className="shrink-0 mt-0.5" />
@@ -83,18 +111,16 @@ const ArrivedOnlyNote = () => (
 const Reports = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [reportData, setReportData] = useState(null); // full API response
+  const [reportData, setReportData] = useState(null);
   const [selectedReportId, setSelectedReportId] = useState(reports[0].id);
   const [selectedReportName, setSelectedReportName] = useState(reports[0].name);
 
   const [period, setPeriod] = useState("today");
-  const [customStart, setCustomStart] = useState("");
-  const [customEnd, setCustomEnd] = useState("");
 
   const fetchReport = async (
     reportId,
     reportName,
-    { silent = false, periodOverride, startOverride, endOverride } = {}
+    { silent = false, periodOverride } = {}
   ) => {
     try {
       if (!silent) {
@@ -103,14 +129,8 @@ const Reports = () => {
       }
 
       const activePeriod = periodOverride ?? period;
-      const activeStart = startOverride ?? customStart;
-      const activeEnd = endOverride ?? customEnd;
 
       const params = { period: activePeriod };
-      if (activePeriod === "custom") {
-        if (activeStart) params.startDate = activeStart;
-        if (activeEnd) params.endDate = activeEnd;
-      }
 
       const response = await api.get(`/reports/${reportId}`, { params });
 
@@ -127,70 +147,62 @@ const Reports = () => {
     }
   };
 
-  // Load a default report immediately on page open
   useEffect(() => {
     fetchReport(reports[0].id, reports[0].name);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Silent 30-second background refresh of whatever is currently being viewed
   useEffect(() => {
     const interval = setInterval(() => {
       fetchReport(selectedReportId, selectedReportName, { silent: true });
     }, 30000);
     return () => clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedReportId, selectedReportName, period, customStart, customEnd]);
+  }, [selectedReportId, selectedReportName, period]);
 
   const handleSelectReport = (reportId, reportName) => {
-    if (reportId === selectedReportId) return; // already viewing this one
+    if (reportId === selectedReportId) return;
     fetchReport(reportId, reportName);
   };
 
   const handlePresetClick = (presetId) => {
     setPeriod(presetId);
-    setCustomStart("");
-    setCustomEnd("");
     fetchReport(selectedReportId, selectedReportName, {
-      periodOverride: presetId,
-      startOverride: "",
-      endOverride: ""
+      periodOverride: presetId
     });
-  };
-
-  const handleCustomStartChange = (e) => {
-    setCustomStart(e.target.value);
-    setPeriod("custom");
-  };
-
-  const handleCustomEndChange = (e) => {
-    setCustomEnd(e.target.value);
-    setPeriod("custom");
-  };
-
-  const handleApplyFilter = () => {
-    fetchReport(selectedReportId, selectedReportName);
   };
 
   const handleReset = () => {
     setPeriod("today");
-    setCustomStart("");
-    setCustomEnd("");
     fetchReport(selectedReportId, selectedReportName, {
-      periodOverride: "today",
-      startOverride: "",
-      endOverride: ""
+      periodOverride: "today"
+    });
+  };
+
+  const handleExportPDF = () => {
+    if (!reportData) return;
+
+    exportReportToPDF({
+      reportId: selectedReportId,
+      reportName: selectedReportName,
+      reportData,
+      periodLabel: PRESET_LABELS[period] || "All"
     });
   };
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold text-white">Reports</h1>
-        <p className="text-zinc-400 mt-1">Transportation analytics and operational reports</p>
+      <div className="flex items-center gap-3 bg-[#18181B] border border-[#27272A] p-4 rounded-xl relative overflow-hidden backdrop-blur-md">
+        <div className="absolute right-0 top-0 translate-x-12 -translate-y-6 w-32 h-32 rounded-full bg-[#F97316]/5 blur-3xl pointer-events-none" />
+        <div className="flex items-center justify-center p-2.5 rounded-lg bg-[#F97316]/10 border border-[#F97316]/20">
+          <FileBarChart2 className="w-5 h-5 text-[#F97316]" />
+        </div>
+        <div>
+          <h3 className="text-sm font-semibold text-[#FFFFFF]">Reports</h3>
+          <p className="text-xs text-[#A1A1AA] font-mono mt-0.5">Transportation analytics and operational reports</p>
+        </div>
       </div>
 
-      {/* FILTER */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -212,18 +224,17 @@ const Reports = () => {
               Reset
             </button>
             <button
-              onClick={handleApplyFilter}
-              disabled={loading}
-              className="flex items-center gap-2 bg-orange-500 hover:bg-orange-600 disabled:opacity-50 text-white text-sm font-semibold px-4 py-2 rounded-xl transition"
+              onClick={handleExportPDF}
+              disabled={loading || !reportData}
+              className="flex items-center gap-2 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 text-zinc-300 text-sm font-semibold px-4 py-2 rounded-xl transition"
             >
-              <RefreshCw className={loading ? "animate-spin" : ""} size={14} />
-              Apply
+              <Download size={14} />
+              Export PDF
             </button>
           </div>
         </div>
 
-        {/* Preset buttons */}
-        <div className="flex flex-wrap gap-2 mb-4">
+        <div className="flex flex-wrap gap-2">
           {PRESETS.map((preset) => (
             <button
               key={preset.id}
@@ -238,25 +249,8 @@ const Reports = () => {
             </button>
           ))}
         </div>
-
-        {/* Custom range */}
-        <div className="grid md:grid-cols-2 gap-4">
-          <input
-            type="date"
-            value={customStart}
-            onChange={handleCustomStartChange}
-            className="bg-zinc-800 border border-zinc-700 rounded-xl p-3 text-white"
-          />
-          <input
-            type="date"
-            value={customEnd}
-            onChange={handleCustomEndChange}
-            className="bg-zinc-800 border border-zinc-700 rounded-xl p-3 text-white"
-          />
-        </div>
       </motion.div>
 
-      {/* REPORT TYPE TABS */}
       <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-2 flex flex-wrap gap-2">
         {reports.map((report) => (
           <button
@@ -274,7 +268,6 @@ const Reports = () => {
         ))}
       </div>
 
-      {/* ERROR */}
       {error && (
         <div className="bg-red-500/10 border border-red-500/30 p-4 rounded-xl text-red-400 flex items-center gap-3">
           <AlertCircle className="w-5 h-5 shrink-0" />
@@ -282,7 +275,6 @@ const Reports = () => {
         </div>
       )}
 
-      {/* RESULT — directly beneath the tabs, always visible, updates in place */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -293,7 +285,7 @@ const Reports = () => {
           <div>
             <h2 className="text-xl font-bold">{selectedReportName}</h2>
             <p className="text-xs text-zinc-500">
-              Showing: {PRESET_LABELS[period] || "Custom Range"}
+              Showing: {PRESET_LABELS[period] || "All"}
               {reportData?.dateFrom && period !== "all" && (
                 <> · {formatDate(reportData.dateFrom)} – {formatDate(reportData.dateTo)}</>
               )}
@@ -326,9 +318,6 @@ const Reports = () => {
   );
 };
 
-// =====================================================
-// Jeepney Activity Report
-// =====================================================
 const JeepneyActivityReport = ({ data }) => {
   const metrics = data.jeepneyMetrics || [];
 
@@ -376,7 +365,8 @@ const JeepneyActivityReport = ({ data }) => {
 
       <div className="bg-zinc-950 border border-zinc-800 rounded-xl overflow-hidden">
         <div className="p-5 border-b border-zinc-800">
-          <h3 className="text-sm font-semibold text-white">Fleet Breakdown</h3>
+          {/* BAGO: "Fleet Breakdown" -> "Jeepney Breakdown" */}
+          <h3 className="text-sm font-semibold text-white">Jeepney Breakdown</h3>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-left min-w-[880px]">
@@ -422,10 +412,19 @@ const JeepneyActivityReport = ({ data }) => {
                       </span>
                     </td>
                     <td className="px-5 py-3">{j.tripsInPeriod?.totalTrips || 0}</td>
-                    <td className="px-5 py-3 text-amber-400">{j.tripsInPeriod?.scheduledTrips || 0}</td>
-                    <td className="px-5 py-3 text-sky-400">{j.tripsInPeriod?.departedTrips || 0}</td>
-                    <td className="px-5 py-3 text-emerald-400">{j.tripsInPeriod?.arrivedTrips || 0}</td>
-                    <td className="px-5 py-3 text-red-400">{j.tripsInPeriod?.cancelledTrips || 0}</td>
+                    {/* BAGO: badge/pill style na, pareho ng Current Status column */}
+                    <td className="px-5 py-3">
+                      <StatusCountBadge value={j.tripsInPeriod?.scheduledTrips || 0} status="Scheduled" />
+                    </td>
+                    <td className="px-5 py-3">
+                      <StatusCountBadge value={j.tripsInPeriod?.departedTrips || 0} status="Departed" />
+                    </td>
+                    <td className="px-5 py-3">
+                      <StatusCountBadge value={j.tripsInPeriod?.arrivedTrips || 0} status="Arrived" />
+                    </td>
+                    <td className="px-5 py-3">
+                      <StatusCountBadge value={j.tripsInPeriod?.cancelledTrips || 0} status="Cancelled" />
+                    </td>
                   </tr>
                 ))
               )}
@@ -437,9 +436,6 @@ const JeepneyActivityReport = ({ data }) => {
   );
 };
 
-// =====================================================
-// Route Summary Report
-// =====================================================
 const RouteSummaryReport = ({ data }) => {
   const routes = data.routeMetrics || [];
 
@@ -515,10 +511,18 @@ const RouteSummaryReport = ({ data }) => {
                     <td className="px-5 py-3">{r.destination}</td>
                     <td className="px-5 py-3">₱{r.estimatedFare}</td>
                     <td className="px-5 py-3">{r.totalTrips}</td>
-                    <td className="px-5 py-3 text-amber-400">{r.scheduledTrips || 0}</td>
-                    <td className="px-5 py-3 text-sky-400">{r.departedTrips || 0}</td>
-                    <td className="px-5 py-3 text-emerald-400">{r.arrivedTrips}</td>
-                    <td className="px-5 py-3 text-red-400">{r.cancelledTrips}</td>
+                    <td className="px-5 py-3">
+                      <StatusCountBadge value={r.scheduledTrips || 0} status="Scheduled" />
+                    </td>
+                    <td className="px-5 py-3">
+                      <StatusCountBadge value={r.departedTrips || 0} status="Departed" />
+                    </td>
+                    <td className="px-5 py-3">
+                      <StatusCountBadge value={r.arrivedTrips} status="Arrived" />
+                    </td>
+                    <td className="px-5 py-3">
+                      <StatusCountBadge value={r.cancelledTrips} status="Cancelled" />
+                    </td>
                     <td className="px-5 py-3">{r.totalPassengers}</td>
                   </tr>
                 ))
@@ -531,12 +535,12 @@ const RouteSummaryReport = ({ data }) => {
   );
 };
 
-// =====================================================
-// Daily Trip Report
-// =====================================================
 const DailyTripReport = ({ data, trips }) => {
   const statusData = Object.entries(data.tripsByStatus || {}).map(([name, value]) => ({ name, value }));
   const hasStatusData = statusData.some((s) => s.value > 0);
+
+  // BAGO: i-sort ascending base sa tripCode (TR-00001 -> TR-00005 -> ...) bago i-slice
+  const sortedTrips = sortTripsAscending(trips).slice(0, 20);
 
   return (
     <div className="space-y-6">
@@ -583,14 +587,14 @@ const DailyTripReport = ({ data, trips }) => {
                 </tr>
               </thead>
               <tbody>
-                {trips.length === 0 ? (
+                {sortedTrips.length === 0 ? (
                   <tr>
                     <td colSpan={5} className="px-4 py-8 text-center text-zinc-500 text-xs">
                       No trips found.
                     </td>
                   </tr>
                 ) : (
-                  trips.slice(0, 20).map((t) => (
+                  sortedTrips.map((t) => (
                     <tr key={t._id} className="text-xs text-white border-b border-zinc-800 hover:bg-zinc-900/50">
                       <td className="px-4 py-3 font-mono">{t.tripCode}</td>
                       <td className="px-4 py-3">{formatDate(t.departureDate)}</td>
@@ -609,9 +613,6 @@ const DailyTripReport = ({ data, trips }) => {
   );
 };
 
-// =====================================================
-// Passenger Summary Report
-// =====================================================
 const PassengerSummaryReport = ({ data, details }) => (
   <div className="space-y-6">
     <ArrivedOnlyNote />
@@ -667,9 +668,6 @@ const PassengerSummaryReport = ({ data, details }) => (
   </div>
 );
 
-// =====================================================
-// Revenue Summary Report
-// =====================================================
 const RevenueSummaryReport = ({ data }) => {
   const byRoute = data.revenueByRoute || [];
   const chartData = byRoute.map((r) => ({ name: `${r.origin} - ${r.destination}`, value: r.revenue }));

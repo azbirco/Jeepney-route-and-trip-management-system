@@ -717,7 +717,7 @@ const Routes = () => {
         isOpen={isEditOpen}
         onClose={() => setIsEditOpen(false)}
         title={selectedRoute ? `Edit Route: ${selectedRoute.routeCode}` : 'Edit Route'}
-        icon={<Map className="w-5 h-5 text-amber-500" />}
+        icon={<Map className="w-5 h-5 text-blue-500" />}
       >
         <form onSubmit={handleEditSubmit} className="space-y-4">
           {formErrors.form && (

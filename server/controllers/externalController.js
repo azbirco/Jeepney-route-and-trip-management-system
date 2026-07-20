@@ -326,7 +326,7 @@ export const getExternalTransactions = async (req,res)=>{
       )
 
       .sort({
-        createdAt:-1
+        createdAt:1
       })
 
       .skip(skip)
@@ -401,11 +401,7 @@ export const getExternalTransactions = async (req,res)=>{
 
 
 
-      // REMOVED: yung "fare" field dati (trip.route.fare) — palaging
-      // null kasi hindi umiiral yung field na yun sa Route schema.
-      // "amount" na lang ang ginagamit, at siya na rin talaga ang
-      // pinapakita sa "Fare Revenue" column sa UI.
-
+   
 
       amount:
         trip.estimatedRevenue,
@@ -433,8 +429,7 @@ export const getExternalTransactions = async (req,res)=>{
 
       data:transactions,
 
-      // NEW: pagination metadata para may Next/Previous si central
-      // admin sa sarili niyang UI, gaya ng nasa dashboard mo
+   
       pagination:{
         currentPage: pageNum,
         totalPages: Math.ceil(totalCount / limitNum),
@@ -475,7 +470,7 @@ export const getExternalRoutes = async (req,res)=>{
   try{
     const routes = await Route.find()
       .sort({
-        createdAt:-1
+        createdAt:1
       })
       .lean();
 

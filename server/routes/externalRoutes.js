@@ -17,25 +17,21 @@ const router = express.Router();
 
 
 
-// =====================================
-// External Summary API
-// GET /api/external/summary
-// =====================================
 router.get(
   "/summary",
-  // verifyApiKey, // TEMP: commented out for local testing - RESTORE BEFORE DEPLOY
+   verifyApiKey, 
   getExternalSummary
 );
 
 router.get(
   "/transactions",
-  // verifyApiKey, // TEMP: commented out for local testing - RESTORE BEFORE DEPLOY
+   verifyApiKey, 
   getExternalTransactions
 );
 
 router.get(
   "/routes",
-  // verifyApiKey, // TEMP: commented out for local testing - RESTORE BEFORE DEPLOY
+   verifyApiKey, 
   getExternalRoutes
 );
 

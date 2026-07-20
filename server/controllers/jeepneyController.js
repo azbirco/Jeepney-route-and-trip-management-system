@@ -38,7 +38,6 @@ export const createJeepney = async (req, res) => {
       details:
         `Created jeepney ${jeepney.plateNumber}`,
 
-      ipAddress: req.ip
 
     });
 
@@ -305,7 +304,6 @@ export const updateJeepney = async(req,res)=>{
       details:
         `Updated jeepney ${jeepney.plateNumber}`,
 
-      ipAddress:req.ip
 
     });
 
@@ -406,7 +404,6 @@ export const deleteJeepney = async(req,res)=>{
       details:
         `Deleted jeepney ${jeepney.plateNumber}`,
 
-      ipAddress:req.ip
 
     });
 

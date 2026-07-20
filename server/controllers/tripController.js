@@ -5,7 +5,6 @@ import Schedule from '../models/Schedule.js';
 import ActivityLog from '../models/ActivityLog.js';
 import PassengerStatistic from '../models/PassengerStatistic.js';
 import passengerStatisticService from '../services/passengerStatisticService.js';
-import synchronizationService from '../services/synchronizationService.js';
 import { notifyAdmin } from '../services/notifyService.js';
 
 
@@ -228,12 +227,6 @@ export const updateTrip = async (req, res) => {
       ipAddress: req.ip
     });
 
-    if (trip.status === 'Arrived' || trip.status === 'Cancelled') {
-      synchronizationService
-        .sendTransactionRecords(req.user?._id, req.ip)
-        .catch(err => console.error('Auto-sync failed silently:', err.message));
-    }
-
     // A full edit can change status, revenue, passenger count, or the
     // fields shown in the central admin's transactions table.
     notifyAdmin();
@@ -404,10 +397,6 @@ export const confirmArrival = async (req, res) => {
       details: `Confirmed arrival for trip ${trip.tripCode}`,
       ipAddress: req.ip
     });
-
-    synchronizationService
-      .sendTransactionRecords(req.user?._id, req.ip)
-      .catch(err => console.error('Auto-sync failed silently:', err.message));
 
     // This is where status officially flips to "Arrived" and revenue
     // becomes counted in the external summary — the most important

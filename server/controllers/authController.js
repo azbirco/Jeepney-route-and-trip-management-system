@@ -6,18 +6,11 @@ import authService from '../services/authService.js';
 export const login = async (req, res) => {
   try {
 
-    const {
+    const { username, password } = req.body;
+
+    const { token, user } = await authService.login(
       username,
       password
-    } = req.body;
-
-    const {
-      token,
-      user
-    } = await authService.login(
-      username,
-      password,
-      req.ip
     );
 
     res.status(200).json({
@@ -65,9 +58,7 @@ export const getProfile = async (req, res) => {
       });
     }
 
-    const user = await authService.getProfile(
-      req.user.id
-    );
+    const user = await authService.getProfile(req.user.id);
 
     res.status(200).json({
       success: true,
@@ -78,8 +69,87 @@ export const getProfile = async (req, res) => {
 
     res.status(
       error.message.includes('not found') ? 404 : 500
-    )
-    .json({
+    ).json({
+      success: false,
+      message: error.message
+    });
+
+  }
+};
+
+
+// @desc    Update Current User's Own Profile (fullName only)
+// @route   PUT /api/auth/profile
+// @access  Private
+export const updateProfile = async (req, res) => {
+  try {
+
+    if (!req.user?.id) {
+      return res.status(401).json({
+        success: false,
+        message: 'Not authorized'
+      });
+    }
+
+    const { fullName } = req.body;
+
+    const updatedUser = await authService.updateProfile(
+      req.user.id,
+      { fullName }
+    );
+
+    res.status(200).json({
+      success: true,
+      message: 'Profile updated successfully',
+      user: updatedUser
+    });
+
+  } catch (error) {
+
+    res.status(
+      error.message.includes('not found') ? 404 : 400
+    ).json({
+      success: false,
+      message: error.message
+    });
+
+  }
+};
+
+
+// @desc    Change Current User's Own Password
+// @route   PUT /api/auth/change-password
+// @access  Private
+export const changePassword = async (req, res) => {
+  try {
+
+    if (!req.user?.id) {
+      return res.status(401).json({
+        success: false,
+        message: 'Not authorized'
+      });
+    }
+
+    const { currentPassword, newPassword } = req.body;
+
+    await authService.changePassword(
+      req.user.id,
+      currentPassword,
+      newPassword
+    );
+
+    res.status(200).json({
+      success: true,
+      message: 'Password changed successfully'
+    });
+
+  } catch (error) {
+
+    let statusCode = 400;
+    if (error.message.includes('incorrect')) statusCode = 401;
+    if (error.message.includes('not found')) statusCode = 404;
+
+    res.status(statusCode).json({
       success: false,
       message: error.message
     });
@@ -95,8 +165,7 @@ export const logout = async (req, res) => {
   try {
 
     await authService.logout(
-      req.user?.id,
-      req.ip
+      req.user?.id
     );
 
     res.status(200).json({

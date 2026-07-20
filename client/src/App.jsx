@@ -11,7 +11,6 @@ import Schedules from "./pages/Schedules";
 import Trips from "./pages/Trips";
 import Passengers from "./pages/Passengers";
 import Reports from "./pages/Reports";
-import Synchronization from "./pages/Synchronization";
 import ActivityLogs from "./pages/ActivityLogs";
 import Profile from "./pages/Profile";
 import Users from './pages/Users';
@@ -80,11 +79,6 @@ export default function App() {
           <Route 
             path="/reports" 
             element={<Reports />} 
-          />
-
-          <Route 
-            path="/synchronization" 
-            element={<Synchronization />} 
           />
 
           <Route 

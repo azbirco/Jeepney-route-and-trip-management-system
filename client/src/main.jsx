@@ -7,6 +7,8 @@ import './index.css';
 
 import { AuthProvider } from './context/AuthContext';
 
+console.log("Running project:", import.meta.env.BASE_URL);
+console.log("Current URL:", window.location.href);
 
 createRoot(document.getElementById('root')).render(
 

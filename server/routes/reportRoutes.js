@@ -11,18 +11,12 @@ import {
 import { protect } from '../middleware/authMiddleware.js';
 import { authorize } from '../middleware/roleMiddleware.js';
 
-console.log('🟢 NEW reportController.js LOADED —', new Date().toISOString());
-
 const router = express.Router();
-
-
 
 const reportAccess = authorize(
   'Admin',
   'Terminal Personnel'
 );
-
-
 
 router.get(
   '/daily-trips',
@@ -31,16 +25,12 @@ router.get(
   getDailyTripReport
 );
 
-
-
 router.get(
   '/passengers',
   protect,
   reportAccess,
   getPassengerSummaryReport
 );
-
-
 
 router.get(
   '/routes',
@@ -49,8 +39,6 @@ router.get(
   getRouteSummaryReport
 );
 
-
-
 router.get(
   '/jeepneys',
   protect,
@@ -58,15 +46,11 @@ router.get(
   getJeepneyActivityReport
 );
 
-
-
 router.get(
   '/revenue',
   protect,
   reportAccess,
   getRevenueSummaryReport
 );
-
-
 
 export default router;

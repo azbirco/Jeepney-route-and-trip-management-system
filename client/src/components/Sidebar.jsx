@@ -12,7 +12,6 @@ import {
   CalendarDays,
   Compass,
   FileSpreadsheet,
-  RefreshCw,
   LogOut,
   User,
   History,
@@ -92,7 +91,6 @@ const Sidebar = ({ isMobileOpen = false, setIsMobileOpen = () => {} }) => {
 
   const adminLinks = [
     ...personnelLinks.slice(0, -1),
-    { name: 'Synchronization', path: '/synchronization', icon: RefreshCw },
     { name: 'Activity Logs', path: '/activity-logs', icon: History },
     { name: 'Users', path: '/users', icon: UserCog },
     { name: 'Profile', path: '/profile', icon: User }
@@ -165,8 +163,11 @@ const Sidebar = ({ isMobileOpen = false, setIsMobileOpen = () => {} }) => {
 
             {!isCollapsed && (
               <motion.div initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }}>
-                <span className="font-bold text-lg">
+                <span className="font-bold text-lg block leading-tight">
                   RouteOps<span className="text-orange-500">.NV</span>
+                </span>
+                <span className="text-[9px] uppercase tracking-wide text-zinc-500 font-mono block leading-tight">
+                  Jeepney Route and Trip Management System
                 </span>
               </motion.div>
             )}

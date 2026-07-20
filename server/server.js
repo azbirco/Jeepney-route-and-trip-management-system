@@ -12,7 +12,6 @@ import scheduleRoutes from "./routes/scheduleRoutes.js";
 import tripRoutes from "./routes/tripRoutes.js";
 import passengerRoutes from "./routes/passengerRoutes.js";
 import reportRoutes from "./routes/reportRoutes.js";
-import syncRoutes from "./routes/syncRoutes.js";
 import externalRoutes from "./routes/externalRoutes.js";
 import { seedInitialData } from "./utils/seeder.js";
 import dashboardRoutes from "./routes/dashboardRoutes.js";
@@ -161,12 +160,6 @@ app.use(
 app.use(
   "/api/reports",
   reportRoutes
-);
-
-
-app.use(
-  "/api/synchronization",
-  syncRoutes
 );
 
 

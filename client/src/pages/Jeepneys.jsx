@@ -560,111 +560,111 @@ const Jeepneys = () => {
           /* Results Table */
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="border-b border-[#27272A] bg-[#18181B]/50 text-[10px] font-mono text-[#A1A1AA] tracking-wider uppercase select-none">
-                  <th className="px-6 py-4 cursor-pointer hover:text-[#FFFFFF] transition-colors" onClick={() => toggleSort('jeepneyNumber')}>
+              <thead className="bg-[#09090B] border-b border-[#27272A]">
+                <tr>
+                  <th className="px-5 py-4 text-[11px] font-mono uppercase text-[#A1A1AA] tracking-wide cursor-pointer hover:text-white transition-colors" onClick={() => toggleSort('jeepneyNumber')}>
                     <div className="flex items-center gap-1">
                       <span>Jeepney No.</span>
                       {sortBy === 'jeepneyNumber' && <SlidersHorizontal className="w-3 h-3 text-[#F97316]" />}
                     </div>
                   </th>
-                  <th className="px-6 py-4 cursor-pointer hover:text-[#FFFFFF] transition-colors" onClick={() => toggleSort('plateNumber')}>
+                  <th className="px-5 py-4 text-[11px] font-mono uppercase text-[#A1A1AA] tracking-wide cursor-pointer hover:text-white transition-colors" onClick={() => toggleSort('plateNumber')}>
                     <div className="flex items-center gap-1">
                       <span>Plate No.</span>
                       {sortBy === 'plateNumber' && <SlidersHorizontal className="w-3 h-3 text-[#F97316]" />}
                     </div>
                   </th>
-                  <th className="px-6 py-4 cursor-pointer hover:text-[#FFFFFF] transition-colors" onClick={() => toggleSort('type')}>
+                  <th className="px-5 py-4 text-[11px] font-mono uppercase text-[#A1A1AA] tracking-wide cursor-pointer hover:text-white transition-colors" onClick={() => toggleSort('type')}>
                     <div className="flex items-center gap-1">
                       <span>Type</span>
                       {sortBy === 'type' && <SlidersHorizontal className="w-3 h-3 text-[#F97316]" />}
                     </div>
                   </th>
-                  <th className="px-6 py-4 cursor-pointer hover:text-[#FFFFFF] transition-colors" onClick={() => toggleSort('capacity')}>
+                  <th className="px-5 py-4 text-[11px] font-mono uppercase text-[#A1A1AA] tracking-wide cursor-pointer hover:text-white transition-colors" onClick={() => toggleSort('capacity')}>
                     <div className="flex items-center gap-1">
                       <span>Capacity</span>
                       {sortBy === 'capacity' && <SlidersHorizontal className="w-3 h-3 text-[#F97316]" />}
                     </div>
                   </th>
-                  <th className="px-6 py-4 cursor-pointer hover:text-[#FFFFFF] transition-colors" onClick={() => toggleSort('status')}>
+                  <th className="px-5 py-4 text-[11px] font-mono uppercase text-[#A1A1AA] tracking-wide cursor-pointer hover:text-white transition-colors" onClick={() => toggleSort('status')}>
                     <div className="flex items-center gap-1">
                       <span>Status</span>
                       {sortBy === 'status' && <SlidersHorizontal className="w-3 h-3 text-[#F97316]" />}
                     </div>
                   </th>
-                  <th className="px-6 py-4 cursor-pointer hover:text-[#FFFFFF] transition-colors" onClick={() => toggleSort('createdAt')}>
+                  <th className="px-5 py-4 text-[11px] font-mono uppercase text-[#A1A1AA] tracking-wide cursor-pointer hover:text-white transition-colors w-40" onClick={() => toggleSort('createdAt')}>
                     <div className="flex items-center gap-1">
                       <span>Created Date</span>
                       {sortBy === 'createdAt' && <SlidersHorizontal className="w-3 h-3 text-[#F97316]" />}
                     </div>
                   </th>
-                  <th className="px-6 py-4 text-right">Actions</th>
+                  <th className="px-5 py-4 text-center text-[11px] font-mono uppercase text-[#A1A1AA] tracking-wide w-32">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-[#27272A]">
+              <tbody>
                 {filteredJeepneys.map((item) => (
                   <tr
                     key={item._id}
-                    className="hover:bg-[#18181B]/55 transition-colors text-xs text-[#FFFFFF] group"
+                    className="border-b border-[#27272A] hover:bg-[#18181B] transition-colors text-xs text-[#FFFFFF] group"
                   >
                     {/* Jeepney Code/Number */}
-                    <td className="px-6 py-4 font-mono font-bold text-[#FFFFFF]">
+                    <td className="px-5 py-4 font-mono font-bold text-[#FFFFFF]">
                       {item.jeepneyNumber}
                     </td>
 
                     {/* Plate Number */}
-                    <td className="px-6 py-4 font-mono text-[#FFFFFF] font-semibold tracking-wide">
+                    <td className="px-5 py-4 font-mono text-[#FFFFFF] font-semibold tracking-wide">
                       {item.plateNumber}
                     </td>
 
                     {/* Type Tag */}
-                    <td className="px-6 py-4">
-                      <span className={`px-2.5 py-1 rounded-full text-[10px] font-medium ${
+                    <td className="px-5 py-4">
+                      <span className={`px-3 py-1 rounded-full border text-[11px] font-semibold ${
                         item.type === 'E-Jeep'
-                          ? 'bg-sky-500/10 border border-sky-500/20 text-sky-400'
-                          : 'bg-indigo-500/10 border border-indigo-500/20 text-indigo-400'
+                          ? 'bg-sky-500/10 border-sky-500/20 text-sky-400'
+                          : 'bg-indigo-500/10 border-indigo-500/20 text-indigo-400'
                       }`}>
                         {item.type}
                       </span>
                     </td>
 
                     {/* Capacity */}
-                    <td className="px-6 py-4 font-mono text-[#A1A1AA]">
+                    <td className="px-5 py-4 font-mono text-[#A1A1AA]">
                       <span className="text-[#FFFFFF] font-semibold">{item.capacity}</span> max load
                     </td>
 
                     {/* Status Badge */}
-                    <td className="px-6 py-4">
-                      <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-mono font-semibold ${
+                    <td className="px-5 py-4">
+                      <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full border text-[11px] font-semibold ${
                         item.status === 'Available'
-                          ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400'
+                          ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
                           : item.status === 'In Transit'
-                          ? 'bg-amber-500/10 border border-amber-500/20 text-amber-400 animate-pulse'
-                          : 'bg-[#EF4444]/10 border border-[#EF4444]/20 text-[#EF4444]'
+                          ? 'bg-amber-500/10 border-amber-500/20 text-amber-400 animate-pulse'
+                          : 'bg-red-500/10 border-red-500/20 text-red-400'
                       }`}>
                         <span className={`w-1.5 h-1.5 rounded-full ${
                           item.status === 'Available'
                             ? 'bg-emerald-400'
                             : item.status === 'In Transit'
                             ? 'bg-amber-400'
-                            : 'bg-[#EF4444]'
+                            : 'bg-red-400'
                         }`} />
                         {item.status}
                       </span>
                     </td>
 
                     {/* Created Date */}
-                    <td className="px-6 py-4 text-[#A1A1AA] font-mono">
+                    <td className="px-5 py-4 text-[#A1A1AA] font-mono w-40">
                       {item.createdAt ? new Date(item.createdAt).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : '---'}
                     </td>
 
                     {/* Actions Panel */}
-                    <td className="px-6 py-4 text-right">
-                      <div className="flex items-center justify-end gap-2 opacity-80 group-hover:opacity-100 transition-opacity">
+                    <td className="px-5 py-4 w-32">
+                      <div className="flex items-center justify-center gap-2">
                         <button
                           onClick={() => openViewModal(item)}
                           title="View Details"
-                          className="p-1.5 hover:bg-[#27272A]/60 hover:text-[#FFFFFF] text-[#A1A1AA] rounded-md transition-colors cursor-pointer"
+                          className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-[#27272A] text-[#A1A1AA] hover:text-white hover:bg-[#27272A] transition text-xs font-semibold cursor-pointer"
                         >
                           <Eye className="w-4 h-4" />
                         </button>
@@ -673,21 +673,23 @@ const Jeepneys = () => {
                             <button
                               onClick={() => openEditModal(item)}
                               title="Edit Unit"
-                              className="p-1.5 hover:bg-amber-500/10 hover:text-amber-400 text-[#A1A1AA] rounded-md transition-colors cursor-pointer"
+                              className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-blue-500/10 border border-blue-500/20 text-blue-400 hover:bg-blue-500/20 transition text-xs font-semibold cursor-pointer"
                             >
                               <Edit className="w-4 h-4" />
+                              <span>Edit</span>
                             </button>
                             <button
                               onClick={() => openDeleteModal(item)}
                               disabled={item.status === 'In Transit'}
                               title={item.status === 'In Transit' ? 'Cannot delete active units in transit' : 'Delete Unit'}
-                              className={`p-1.5 text-[#A1A1AA] rounded-md transition-colors cursor-pointer ${
+                              className={`flex items-center gap-1.5 px-3 py-2 rounded-lg border text-xs font-semibold transition ${
                                 item.status === 'In Transit'
-                                  ? 'opacity-35 cursor-not-allowed'
-                                  : 'hover:bg-[#EF4444]/10 hover:text-[#EF4444]'
+                                  ? 'bg-red-500/5 border-red-500/10 text-red-400/40 cursor-not-allowed'
+                                  : 'bg-red-500/10 border-red-500/20 text-red-400 hover:bg-red-500/20 cursor-pointer'
                               }`}
                             >
                               <Trash2 className="w-4 h-4" />
+                              <span>Delete</span>
                             </button>
                           </>
                         )}

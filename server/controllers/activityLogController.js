@@ -12,7 +12,12 @@ export const getActivityLogs = async (req, res) => {
       page = 1
     } = req.query;
 
-    const query = {};
+    // Exclude background sync entries — these are automated
+    // system events, not user activities, so they don't belong
+    // in the audit trail.
+    const query = {
+      action: { $ne: 'Synchronization Success' }
+    };
 
     if (action) {
       query.action = action;

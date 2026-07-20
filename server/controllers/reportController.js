@@ -72,7 +72,7 @@ const maybeSaveReport = async ({ req, reportType, start, end, summaryData }) => 
     user: req.user?.id,
     action: 'Generated Report',
     details: `Generated ${reportType} from ${start.toLocaleDateString()} to ${end.toLocaleDateString()}. ID: ${report._id}`,
-    ipAddress: req.ip
+
   });
 
   return report;

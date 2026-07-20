@@ -2,7 +2,6 @@ import Jeepney from '../models/Jeepney.js';
 import Route from '../models/Route.js';
 import Trip from '../models/Trip.js';
 import PassengerStatistic from '../models/PassengerStatistic.js';
-import SynchronizationLog from '../models/SynchronizationLog.js';
 import ActivityLog from '../models/ActivityLog.js';
 
 // @desc    Dashboard Overview
@@ -201,10 +200,10 @@ export const getDashboardOverview = async (req, res) => {
       pendingArrivalsCount
     };
 
-    // Recent Activities & Synchronization — Admin only. This is a
-    // system-wide audit trail (account creation, login/logout events for
-    // every user) which isn't appropriate for Terminal Personnel to see,
-    // even though they share the rest of the operational dashboard.
+    // Recent Activities — Admin only. This is a system-wide audit trail
+    // (account creation, login/logout events for every user) which isn't
+    // appropriate for Terminal Personnel to see, even though they share
+    // the rest of the operational dashboard.
     if (isAdmin) {
 
       responseData.activities = await ActivityLog.find()
@@ -213,17 +212,6 @@ export const getDashboardOverview = async (req, res) => {
           createdAt: -1
         })
         .limit(5);
-
-      const latestSync = await SynchronizationLog.findOne()
-        .sort({
-          createdAt: -1
-        });
-
-      responseData.synchronization = {
-        lastSync: latestSync?.lastSync || null,
-        status: latestSync?.syncStatus || "Pending",
-        records: latestSync?.recordsTransmitted || 0
-      };
 
     }
 

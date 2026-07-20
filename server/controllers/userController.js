@@ -14,7 +14,7 @@ export const createUser = async (req, res) => {
       user: req.user?._id,
       action: 'Create User',
       details: `Created user account ${user.username} (${user.role})`,
-      ipAddress: req.ip
+
     });
 
     res.status(201).json({
@@ -129,7 +129,7 @@ export const updateUser = async (req, res) => {
       user: req.user?._id,
       action: 'Update User',
       details: `Updated user account ${user.username}`,
-      ipAddress: req.ip
+
     });
 
     res.status(200).json({
@@ -167,7 +167,7 @@ export const deleteUser = async (req, res) => {
       user: req.user?._id,
       action: 'Delete User',
       details: `Deleted user account ${user.username}`,
-      ipAddress: req.ip
+
     });
 
     res.status(200).json({ success: true, message: 'User account deleted successfully' });

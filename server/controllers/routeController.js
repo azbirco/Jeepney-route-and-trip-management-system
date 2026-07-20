@@ -46,7 +46,6 @@ export const createRoute = async (req, res) => {
         details:
           `Created route ${route.origin} - ${route.destination}`,
 
-        ipAddress: req.ip
 
       });
 
@@ -348,7 +347,6 @@ export const updateRoute = async(req,res)=>{
         details:
           `Updated route ${route.origin} - ${route.destination}`,
 
-        ipAddress:req.ip
 
       });
 
@@ -474,7 +472,6 @@ export const deleteRoute = async(req,res)=>{
         details:
           `Deleted route ${route.origin} - ${route.destination}`,
 
-        ipAddress:req.ip
 
       });
 

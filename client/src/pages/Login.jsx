@@ -60,27 +60,6 @@ const Login = () => {
 
   setLoading(false);
 };
-  const fillDemoCredentials = (role) => {
-
-    if (role === 'Admin') {
-
-      setForm({
-        username: 'admin',
-        password: 'password123'
-      });
-
-    } else {
-
-      setForm({
-        username: 'terminalpersonnel1',
-        password: 'password123'
-      });
-
-    }
-
-    setError(null);
-
-  };
 
   return (
 
@@ -130,7 +109,6 @@ const Login = () => {
             <span className="text-[#F97316]">
               .NV
             </span>
-
           </motion.h1>
 
           <motion.p
@@ -167,10 +145,8 @@ const Login = () => {
 
           <div className="border-b border-[#27272A] pb-4 mb-6">
 
-            <h2 className="text-lg font-bold text-white">
-
-              Sign In
-
+           <h2 className="text-lg font-bold text-white text-center">
+            Log in to your account
             </h2>
 
           </div>
@@ -333,71 +309,13 @@ const Login = () => {
 
               ) : (
 
-                'Authorize Access'
+                'Login'
 
               )}
 
             </button>
 
           </form>
-
-          <div className="mt-8 pt-6 border-t border-[#27272A]">
-
-            <span className="text-[10px] uppercase tracking-wider text-[#A1A1AA]">
-
-              Quick sandbox accounts
-
-            </span>
-
-            <div className="grid grid-cols-2 gap-2 mt-3">
-
-              <button
-
-                onClick={() => fillDemoCredentials('Admin')}
-
-                className="p-3 rounded-lg border border-[#27272A] bg-[#18181B]"
-
-              >
-
-                <div className="text-[#F97316]">
-
-                  Admin
-
-                </div>
-
-                <div className="text-[10px] text-[#A1A1AA]">
-
-                  admin / password123
-
-                </div>
-
-              </button>
-
-              <button
-
-                onClick={() => fillDemoCredentials('Personnel')}
-
-                className="p-3 rounded-lg border border-[#27272A] bg-[#18181B]"
-
-              >
-
-                <div className="text-[#F97316]">
-
-                  Personnel
-
-                </div>
-
-                <div className="text-[10px] text-[#A1A1AA]">
-
-                  terminalpersonnel1 / password123
-
-                </div>
-
-              </button>
-
-            </div>
-
-          </div>
 
         </motion.div>
 

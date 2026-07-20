@@ -22,7 +22,14 @@ import FormModal from '../layouts/common/FormModal';
 import ConfirmationModal from '../layouts/common/ConfirmationModal';
 import { useAuth } from '../context/AuthContext';
 
+// Used for the filter dropdown — includes Admin so existing Admin
+// accounts can still be searched/filtered in the table.
 const ROLES = ['Admin', 'Terminal Personnel', 'Driver'];
+
+// Used for Create/Edit forms — Admin excluded on purpose. There is
+// only ever one Admin account in this system; creating additional
+// Admin accounts is intentionally kept out of this UI.
+const ASSIGNABLE_ROLES = ['Terminal Personnel', 'Driver'];
 
 const Users = () => {
   const { user: currentUser } = useAuth();
@@ -136,7 +143,9 @@ const Users = () => {
       errors.password = 'New password must be at least 6 characters.';
     }
 
-    if (!formData.role || !ROLES.includes(formData.role)) {
+    // Guard: role must be one of the assignable roles (Admin excluded),
+    // even if formData.role were somehow tampered with before submit.
+    if (!formData.role || !ASSIGNABLE_ROLES.includes(formData.role)) {
       errors.role = 'A valid role must be selected.';
     }
 
@@ -222,6 +231,13 @@ const Users = () => {
   };
 
   const openEditModal = (user) => {
+    // Guard: prevent opening the edit modal for an Admin account through
+    // this UI, since Admin isn't one of the assignable/editable roles here.
+    if (user.role === 'Admin') {
+      triggerSuccess('The Admin account cannot be modified through this screen.');
+      return;
+    }
+
     setSelectedUser(user);
     setFormData({
       username: user.username,
@@ -506,86 +522,103 @@ const Users = () => {
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="border-b border-[#27272A] bg-[#18181B]/50 text-[10px] font-mono text-[#A1A1AA] tracking-wider uppercase select-none">
-                  <th className="px-6 py-4 cursor-pointer hover:text-[#FFFFFF] transition-colors" onClick={() => handleSort('username')}>
+              <thead className="bg-[#09090B] border-b border-[#27272A]">
+                <tr className="text-[11px] font-mono text-[#A1A1AA] tracking-wider uppercase select-none">
+                  <th className="px-5 py-4 cursor-pointer hover:text-[#FFFFFF] transition-colors" onClick={() => handleSort('username')}>
                     Username
                   </th>
-                  <th className="px-6 py-4 cursor-pointer hover:text-[#FFFFFF] transition-colors" onClick={() => handleSort('fullName')}>
+                  <th className="px-5 py-4 cursor-pointer hover:text-[#FFFFFF] transition-colors" onClick={() => handleSort('fullName')}>
                     Full Name
                   </th>
-                  <th className="px-6 py-4">Email</th>
-                  <th className="px-6 py-4 cursor-pointer hover:text-[#FFFFFF] transition-colors" onClick={() => handleSort('role')}>
+                  <th className="px-5 py-4">Email</th>
+                  <th className="px-5 py-4 cursor-pointer hover:text-[#FFFFFF] transition-colors" onClick={() => handleSort('role')}>
                     Role
                   </th>
-                  <th className="px-6 py-4">Status</th>
-                  <th className="px-6 py-4 text-right">Actions</th>
+                  <th className="px-5 py-4">Status</th>
+                  <th className="px-5 py-4 text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-[#27272A]">
-                {filteredUsers.map((item) => (
-                  <tr
-                    key={item._id}
-                    className="hover:bg-[#18181B]/55 transition-colors text-xs text-[#FFFFFF] group"
-                  >
-                    <td className="px-6 py-4 font-mono font-bold text-[#FFFFFF]">
-                      {item.username}
-                      {item._id === currentUser?._id && (
-                        <span className="ml-2 text-[9px] text-[#A1A1AA] font-normal">(You)</span>
-                      )}
-                    </td>
+              <tbody>
+                {filteredUsers.map((item) => {
+                  const isAdminRow = item.role === 'Admin';
 
-                    <td className="px-6 py-4 text-[#FFFFFF]">
-                      {item.fullName}
-                    </td>
+                  return (
+                    <tr
+                      key={item._id}
+                      className="border-b border-[#27272A] hover:bg-[#18181B] transition-colors text-xs text-[#FFFFFF] group"
+                    >
+                      <td className="px-5 py-4 font-mono font-bold text-[#FFFFFF]">
+                        {item.username}
+                        {item._id === currentUser?._id && (
+                          <span className="ml-2 text-[9px] text-[#A1A1AA] font-normal">(You)</span>
+                        )}
+                      </td>
 
-                    <td className="px-6 py-4 text-[#A1A1AA] font-mono">
-                      {item.email}
-                    </td>
+                      <td className="px-5 py-4 text-[#FFFFFF]">
+                        {item.fullName}
+                      </td>
 
-                    <td className="px-6 py-4">
-                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-medium border ${getRoleStyle(item.role)}`}>
-                        {getRoleIcon(item.role)}
-                        {item.role}
-                      </span>
-                    </td>
+                      <td className="px-5 py-4 text-[#A1A1AA] font-mono">
+                        {item.email}
+                      </td>
 
-                    <td className="px-6 py-4">
-                      <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-mono font-semibold ${
-                        item.isActive
-                          ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400'
-                          : 'bg-[#EF4444]/10 border border-[#EF4444]/20 text-[#EF4444]'
-                      }`}>
-                        <span className={`w-1.5 h-1.5 rounded-full ${item.isActive ? 'bg-emerald-400' : 'bg-[#EF4444]'}`} />
-                        {item.isActive ? 'Active' : 'Deactivated'}
-                      </span>
-                    </td>
+                      <td className="px-5 py-4">
+                        <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-semibold border ${getRoleStyle(item.role)}`}>
+                          {getRoleIcon(item.role)}
+                          {item.role}
+                        </span>
+                      </td>
 
-                    <td className="px-6 py-4 text-right">
-                      <div className="flex items-center justify-end gap-2 opacity-80 group-hover:opacity-100 transition-opacity">
-                        <button
-                          onClick={() => openEditModal(item)}
-                          title="Edit Account"
-                          className="p-1.5 hover:bg-amber-500/10 hover:text-amber-400 text-[#A1A1AA] rounded-md transition-colors cursor-pointer"
-                        >
-                          <Edit className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => openDeleteModal(item)}
-                          disabled={item._id === currentUser?._id}
-                          title={item._id === currentUser?._id ? 'Cannot delete your own account' : 'Delete Account'}
-                          className={`p-1.5 text-[#A1A1AA] rounded-md transition-colors cursor-pointer ${
-                            item._id === currentUser?._id
-                              ? 'opacity-35 cursor-not-allowed'
-                              : 'hover:bg-[#EF4444]/10 hover:text-[#EF4444]'
-                          }`}
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                      <td className="px-5 py-4">
+                        <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-[11px] font-semibold border ${
+                          item.isActive
+                            ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
+                            : 'bg-[#EF4444]/10 border-[#EF4444]/20 text-[#EF4444]'
+                        }`}>
+                          <span className={`w-1.5 h-1.5 rounded-full ${item.isActive ? 'bg-emerald-400' : 'bg-[#EF4444]'}`} />
+                          {item.isActive ? 'Active' : 'Deactivated'}
+                        </span>
+                      </td>
+
+                      <td className="px-5 py-4 text-right">
+                        <div className="flex items-center justify-end gap-2 opacity-80 group-hover:opacity-100 transition-opacity">
+                          <button
+                            onClick={() => openEditModal(item)}
+                            disabled={isAdminRow}
+                            title={isAdminRow ? 'The Admin account cannot be modified here' : 'Edit Account'}
+                            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg border text-xs font-semibold transition ${
+                              isAdminRow
+                                ? 'opacity-35 cursor-not-allowed border-[#27272A] text-[#A1A1AA]'
+                                : 'bg-blue-500/10 border-blue-500/20 text-blue-400 hover:bg-blue-500/20 cursor-pointer'
+                            }`}
+                          >
+                            <Edit className="w-3.5 h-3.5" />
+                            <span>Edit</span>
+                          </button>
+                          <button
+                            onClick={() => openDeleteModal(item)}
+                            disabled={item._id === currentUser?._id || isAdminRow}
+                            title={
+                              item._id === currentUser?._id
+                                ? 'Cannot delete your own account'
+                                : isAdminRow
+                                ? 'The Admin account cannot be deleted'
+                                : 'Delete Account'
+                            }
+                            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg border text-xs font-semibold transition ${
+                              item._id === currentUser?._id || isAdminRow
+                                ? 'opacity-35 cursor-not-allowed border-[#27272A] text-[#A1A1AA]'
+                                : 'bg-red-500/10 border-red-500/20 text-red-400 hover:bg-red-500/20 cursor-pointer'
+                            }`}
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            <span>Delete</span>
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -704,11 +737,11 @@ const Users = () => {
             )}
           </div>
 
-          {/* Role Selection */}
+          {/* Role Selection — Admin excluded, only 2 buttons now */}
           <div className="space-y-1.5">
             <label className="text-xs font-mono text-[#A1A1AA] uppercase block">Account Role</label>
-            <div className="grid grid-cols-3 gap-2">
-              {ROLES.map((r) => (
+            <div className="grid grid-cols-2 gap-2">
+              {ASSIGNABLE_ROLES.map((r) => (
                 <button
                   key={r}
                   type="button"
@@ -764,7 +797,7 @@ const Users = () => {
         isOpen={isEditOpen}
         onClose={() => setIsEditOpen(false)}
         title={selectedUser ? `Modify Account: ${selectedUser.username}` : 'Modify Account'}
-        icon={<Edit className="w-5 h-5 text-amber-500" />}
+        icon={<Edit className="w-5 h-5 text-blue-500" />}
       >
         <form onSubmit={handleEditSubmit} className="space-y-4">
           {formErrors.form && (
@@ -866,11 +899,11 @@ const Users = () => {
             )}
           </div>
 
-          {/* Role Selection */}
+          {/* Role Selection — Admin excluded, only 2 buttons now */}
           <div className="space-y-1.5">
             <label className="text-xs font-mono text-[#A1A1AA] uppercase block">Account Role</label>
-            <div className="grid grid-cols-3 gap-2">
-              {ROLES.map((r) => (
+            <div className="grid grid-cols-2 gap-2">
+              {ASSIGNABLE_ROLES.map((r) => (
                 <button
                   key={r}
                   type="button"

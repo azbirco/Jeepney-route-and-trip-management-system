@@ -41,11 +41,6 @@ const pageTitles = {
     subtitle: 'Analytical metrics and compliance auditing'
   },
 
-  '/synchronization': {
-    title: 'Smart City Synchronization',
-    subtitle: 'Command logs and automated data replication'
-  },
-
   '/activity-logs': {
     title: 'System Activity Logs',
     subtitle: 'Immutable record of staff actions'

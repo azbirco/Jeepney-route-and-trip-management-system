@@ -96,20 +96,27 @@ const ActivityLogs = () => {
     <div className="space-y-6">
 
 
-      <div>
+      <div className="flex items-center gap-3 bg-[#18181B] border border-[#27272A] p-4 rounded-xl relative overflow-hidden backdrop-blur-md">
 
-        <h1 className="text-2xl font-bold text-white">
+        <div className="absolute right-0 top-0 translate-x-12 -translate-y-6 w-32 h-32 rounded-full bg-[#F97316]/5 blur-3xl pointer-events-none" />
 
-          Activity Logs
+        <div className="flex items-center justify-center p-2.5 rounded-lg bg-[#F97316]/10 border border-[#F97316]/20">
 
-        </h1>
+          <History className="w-5 h-5 text-[#F97316]" />
 
+        </div>
 
-        <p className="text-zinc-400">
+        <div>
 
-          System audit trail and user activities
+          <h3 className="text-sm font-semibold text-[#FFFFFF]">
+            Activity Logs
+          </h3>
 
-        </p>
+          <p className="text-xs text-[#A1A1AA] font-mono mt-0.5">
+            System audit trail and user activities
+          </p>
+
+        </div>
 
       </div>
 
@@ -244,13 +251,6 @@ const ActivityLogs = () => {
 
                   <th className="text-left p-4">
 
-                    IP Address
-
-                  </th>
-
-
-                  <th className="text-left p-4">
-
                     Date
 
                   </th>
@@ -299,13 +299,6 @@ const ActivityLogs = () => {
                     <td className="p-4">
 
                       {log.details || "-"}
-
-                    </td>
-
-
-                    <td className="p-4">
-
-                      {log.ipAddress || "-"}
 
                     </td>
 

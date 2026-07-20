@@ -162,6 +162,16 @@ const [sortOrder, setSortOrder] = useState('asc');
     return inactiveSchedule ? [...routeSchedules, inactiveSchedule] : routeSchedules;
   };
 
+  // A driver is "locked out" of assignment if they currently have an ongoing
+  // trip, UNLESS they are already the driver on the trip being edited right
+  // now (so editing a trip doesn't accidentally strand its own driver).
+  const isDriverBlocked = (drv) => {
+    if (!drv?.hasOngoingTrip) return false;
+    const isOriginalDriverOfThisTrip =
+      selectedTrip && selectedTrip.driver && selectedTrip.driver._id === drv._id;
+    return !isOriginalDriverOfThisTrip;
+  };
+
   const handleRouteSelectChange = (e) => {
     const routeId = e.target.value;
     const matchingSchedules = schedules.filter(s => s.route && s.route._id === routeId);
@@ -210,6 +220,13 @@ const [sortOrder, setSortOrder] = useState('asc');
     if (!formData.route) errors.route = 'A transit corridor route is required.';
     if (!formData.schedule) errors.schedule = 'A departure schedule slot is required.';
     if (!formData.departureDate) errors.departureDate = 'Departure operation date is required.';
+
+    if (formData.driver) {
+      const chosenDriver = drivers.find(d => d._id === formData.driver);
+      if (chosenDriver && isDriverBlocked(chosenDriver)) {
+        errors.driver = 'This driver already has an ongoing trip and cannot be assigned again.';
+      }
+    }
 
     if (formData.jeepney && (formData.passengerCount !== undefined && formData.passengerCount !== '')) {
       const selectedJeep = jeepneys.find(j => j._id === formData.jeepney);
@@ -757,19 +774,31 @@ const [sortOrder, setSortOrder] = useState('asc');
               name="driver"
               value={formData.driver}
               onChange={handleInputChange}
-              className="w-full px-3.5 py-2.5 text-xs bg-[#09090B] border border-[#27272A] rounded-lg text-[#FFFFFF] outline-none focus:border-[#F97316]/50 transition-all cursor-pointer"
+              className={`w-full px-3.5 py-2.5 text-xs bg-[#09090B] border rounded-lg text-[#FFFFFF] outline-none focus:border-[#F97316]/50 transition-all cursor-pointer ${
+                formErrors.driver ? 'border-[#EF4444]' : 'border-[#27272A]'
+              }`}
             >
               <option value="">Unassigned</option>
               {drivers.map((drv) => (
-                <option key={drv._id} value={drv._id}>
-                  {drv.fullName} (@{drv.username}){drv.hasOngoingTrip ? ' — ⚠ Has Ongoing Trip' : ''}
+                <option
+                  key={drv._id}
+                  value={drv._id}
+                  disabled={isDriverBlocked(drv)}
+                >
+                  {drv.fullName} (@{drv.username}){drv.hasOngoingTrip ? ' — Unavailable (Ongoing Trip)' : ''}
                 </option>
               ))}
             </select>
+            {formErrors.driver && (
+              <p className="text-[10px] text-[#EF4444] mt-1 flex items-center gap-1 font-sans">
+                <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                <span>{formErrors.driver}</span>
+              </p>
+            )}
             {drivers.length === 0 ? (
               <span className="text-[9px] font-mono text-amber-400 block mt-1">No active Driver accounts registered. This trip will remain unassigned.</span>
             ) : (
-              <span className="text-[9px] font-mono text-[#A1A1AA] block mt-1">Drivers marked "Has Ongoing Trip" are still on an active run — assign with caution.</span>
+              <span className="text-[9px] font-mono text-[#A1A1AA] block mt-1">Drivers with an ongoing trip are locked out and cannot be assigned again until that trip is completed.</span>
             )}
           </div>
 
@@ -922,10 +951,9 @@ const [sortOrder, setSortOrder] = useState('asc');
               className="w-full px-3.5 py-2.5 text-xs bg-[#09090B] border border-[#27272A] rounded-lg text-[#FFFFFF] outline-none focus:border-[#F97316]/50 transition-all cursor-pointer"
             >
               <option value="Scheduled">Scheduled</option>
-              <option value="Departed">Departed</option>
-              <option value="Arrived">Arrived</option>
               <option value="Cancelled">Cancelled</option>
             </select>
+            <p className="text-[10px] text-[#71717A] mt-1">Departed/Arrived can only be reported by the assigned Driver, or corrected via Admin override.</p>
           </div>
 
           <div className="flex gap-3 pt-4 border-t border-[#27272A]">
@@ -951,7 +979,7 @@ const [sortOrder, setSortOrder] = useState('asc');
         isOpen={isEditOpen}
         onClose={() => setIsEditOpen(false)}
         title={selectedTrip ? `Modify Trip Dispatch: ${selectedTrip.tripCode}` : 'Modify Trip'}
-        icon={<Calendar className="w-5 h-5 text-amber-500" />}
+        icon={<Calendar className="w-5 h-5 text-blue-500" />}
       >
         <form onSubmit={handleEditSubmit} className="space-y-4">
           {formErrors.form && (
@@ -992,17 +1020,31 @@ const [sortOrder, setSortOrder] = useState('asc');
               name="driver"
               value={formData.driver}
               onChange={handleInputChange}
-              className="w-full px-3.5 py-2.5 text-xs bg-[#09090B] border border-[#27272A] rounded-lg text-[#FFFFFF] outline-none focus:border-[#F97316]/50 transition-all cursor-pointer"
+              className={`w-full px-3.5 py-2.5 text-xs bg-[#09090B] border rounded-lg text-[#FFFFFF] outline-none focus:border-[#F97316]/50 transition-all cursor-pointer ${
+                formErrors.driver ? 'border-[#EF4444]' : 'border-[#27272A]'
+              }`}
             >
               <option value="">Unassigned</option>
               {drivers.map((drv) => (
-                <option key={drv._id} value={drv._id}>
-                  {drv.fullName} (@{drv.username}){drv.hasOngoingTrip ? ' — ⚠ Has Ongoing Trip' : ''}
+                <option
+                  key={drv._id}
+                  value={drv._id}
+                  disabled={isDriverBlocked(drv)}
+                >
+                  {drv.fullName} (@{drv.username}){drv.hasOngoingTrip ? ' — Unavailable (Ongoing Trip)' : ''}
                 </option>
               ))}
             </select>
-            {drivers.length === 0 && (
+            {formErrors.driver && (
+              <p className="text-[10px] text-[#EF4444] mt-1 flex items-center gap-1 font-sans">
+                <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                <span>{formErrors.driver}</span>
+              </p>
+            )}
+            {drivers.length === 0 ? (
               <span className="text-[9px] font-mono text-amber-400 block mt-1">No active Driver accounts registered. This trip will remain unassigned.</span>
+            ) : (
+              <span className="text-[9px] font-mono text-[#A1A1AA] block mt-1">Drivers with an ongoing trip are locked out and cannot be assigned again until that trip is completed.</span>
             )}
           </div>
 
@@ -1159,10 +1201,15 @@ const [sortOrder, setSortOrder] = useState('asc');
               className="w-full px-3.5 py-2.5 text-xs bg-[#09090B] border border-[#27272A] rounded-lg text-[#FFFFFF] outline-none focus:border-[#F97316]/50 transition-all cursor-pointer"
             >
               <option value="Scheduled">Scheduled</option>
-              <option value="Departed">Departed</option>
-              <option value="Arrived">Arrived</option>
               <option value="Cancelled">Cancelled</option>
+              {/* Trip already reported Departed/Arrived by the Driver — shown
+                  disabled so the true value stays visible, but Terminal
+                  Personnel can't reselect it or set it directly. */}
+              {['Departed', 'Arrived'].includes(formData.status) && (
+                <option value={formData.status} disabled>{formData.status}</option>
+              )}
             </select>
+            <p className="text-[10px] text-[#71717A] mt-1">Departed/Arrived can only be reported by the assigned Driver, or corrected via Admin override.</p>
           </div>
 
           <div className="flex gap-3 pt-4 border-t border-[#27272A]">
