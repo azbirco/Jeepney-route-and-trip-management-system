@@ -153,11 +153,11 @@ const Sidebar = ({ isMobileOpen = false, setIsMobileOpen = () => {} }) => {
         `}
       >
 
-        <div className="flex items-center justify-between h-20 px-6 border-b border-[#27272A]">
+        <div className="flex items-center justify-between min-h-20 px-6 py-3 border-b border-[#27272A]">
 
-          <div className="flex items-center gap-3 overflow-hidden">
+          <div className="flex items-center gap-3 overflow-x-hidden">
 
-            <div className="flex items-center justify-center p-2 rounded-lg bg-orange-500/10 border border-orange-500/20">
+            <div className="flex items-center justify-center p-2 rounded-lg bg-orange-500/10 border border-orange-500/20 shrink-0">
               <Bus className="w-6 h-6 text-orange-500"/>
             </div>
 
@@ -166,7 +166,7 @@ const Sidebar = ({ isMobileOpen = false, setIsMobileOpen = () => {} }) => {
                 <span className="font-bold text-lg block leading-tight">
                   RouteOps<span className="text-orange-500">.NV</span>
                 </span>
-                <span className="text-[9px] uppercase tracking-wide text-zinc-500 font-mono block leading-tight">
+                <span className="text-[11px] text-zinc-300 font-mono block leading-snug max-w-[150px]">
                   Jeepney Route and Trip Management System
                 </span>
               </motion.div>
